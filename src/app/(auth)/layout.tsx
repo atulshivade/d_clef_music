@@ -1,7 +1,16 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AudioLines } from "lucide-react";
+import { auth } from "@/lib/auth";
 
-export default function AuthLayout({ children }: { children: React.ReactNode }) {
+export default async function AuthLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  // Already signed in → no need to see sign-in / sign-up pages.
+  const session = await auth();
+  if (session?.user) redirect("/challenges");
   return (
     <div className="surface-gradient grid min-h-screen place-items-center px-4 py-10">
       <div className="w-full max-w-md">

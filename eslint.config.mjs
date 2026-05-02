@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Build artifacts written by the Netlify CLI / OpenNext adapter:
+    ".netlify/**",
   ]),
 ]);
 

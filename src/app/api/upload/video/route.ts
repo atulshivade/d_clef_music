@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { getVideoProvider, isVideoContentType } from "@/lib/video";
+import { getUploadCapabilities } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -10,6 +11,17 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Short-circuit before parsing the body when uploads are disabled — a
+  // clean 503 is much friendlier than letting the body parsing reach an
+  // EphemeralFsGuardProvider that throws a 500.
+  const caps = getUploadCapabilities();
+  if (!caps.uploadsEnabled) {
+    return NextResponse.json(
+      { error: caps.reason ?? "Uploads disabled", uploadsEnabled: false },
+      { status: 503 },
+    );
   }
 
   const form = await req.formData().catch(() => null);

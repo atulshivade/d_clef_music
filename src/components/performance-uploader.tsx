@@ -1,8 +1,15 @@
 "use client";
 
-import { useState, useTransition, useRef } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Upload, Link as LinkIcon, Send, Music2 } from "lucide-react";
+import {
+  Loader2,
+  Upload,
+  Link as LinkIcon,
+  Send,
+  Music2,
+  AlertCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +45,12 @@ type Defaults = {
   skillLevel?: SkillLevel | null;
 };
 
+type UploadCapabilities = {
+  uploadsEnabled: boolean;
+  reason: string | null;
+  storageProvider: string;
+};
+
 export function PerformanceUploader({
   challengeId,
   defaults,
@@ -47,7 +60,36 @@ export function PerformanceUploader({
 }) {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [mode, setMode] = useState<Mode>("FILE");
+  const [caps, setCaps] = useState<UploadCapabilities | null>(null);
+  // Default to EMBED until we hear back from the server. If direct uploads
+  // are disabled (e.g. on the Netlify demo) the user never sees a broken
+  // FILE tab.
+  const [mode, setMode] = useState<Mode>("EMBED");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/upload/capabilities")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: UploadCapabilities | null) => {
+        if (cancelled || !j) return;
+        setCaps(j);
+        // Only flip into FILE mode by default if uploads work.
+        if (j.uploadsEnabled) setMode("FILE");
+      })
+      .catch(() => {
+        // If the capability probe fails we assume uploads work — local dev
+        // path. The API call itself will surface any real failure.
+        if (!cancelled) {
+          setCaps({ uploadsEnabled: true, reason: null, storageProvider: "local" });
+          setMode("FILE");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const uploadsEnabled = caps?.uploadsEnabled ?? true;
   const [file, setFile] = useState<File | null>(null);
   const [filePreview, setFilePreview] = useState<string | null>(null);
   const [embedUrl, setEmbedUrl] = useState("");
@@ -94,8 +136,21 @@ export function PerformanceUploader({
         body: fd,
       });
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error ?? `Upload failed (${res.status})`);
+        // Try to parse a JSON error body (our route always returns one).
+        // If the response is plain text (e.g. an upstream gateway 500 from
+        // exceeding Netlify's request body limit), fall back to a friendly
+        // message that points at the embed flow.
+        const ct = res.headers.get("content-type") ?? "";
+        if (ct.includes("application/json")) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error ?? `Upload failed (${res.status})`);
+        }
+        const txt = (await res.text()).slice(0, 200);
+        throw new Error(
+          `Upload rejected by the server (${res.status}). The file may be too ` +
+            `large for this deployment's request limit. Try the "Paste link" tab ` +
+            `with a YouTube or Vimeo URL instead. Server said: ${txt}`,
+        );
       }
       const j = (await res.json()) as {
         provider: VideoProvider;
@@ -223,9 +278,22 @@ export function PerformanceUploader({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      {caps && !caps.uploadsEnabled && caps.reason && (
+        <div
+          className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200"
+          role="status"
+          data-testid="uploads-disabled-banner"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <div className="font-medium">Direct file uploads are off on this deployment</div>
+            <p className="mt-0.5 text-amber-200/80">{caps.reason}</p>
+          </div>
+        </div>
+      )}
       <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
         <TabsList>
-          <TabsTrigger value="FILE">
+          <TabsTrigger value="FILE" disabled={!uploadsEnabled}>
             <Upload className="h-4 w-4" /> Upload video
           </TabsTrigger>
           <TabsTrigger value="EMBED">
@@ -234,11 +302,19 @@ export function PerformanceUploader({
         </TabsList>
 
         <TabsContent value="FILE" className="space-y-3">
-          <Label htmlFor="file">Performance video (max 200 MB)</Label>
+          <Label htmlFor="file">
+            Performance video (max 200 MB)
+            {!uploadsEnabled && (
+              <span className="ml-2 text-xs text-amber-300">
+                — disabled on this deployment
+              </span>
+            )}
+          </Label>
           <Input
             id="file"
             type="file"
             accept="video/*"
+            disabled={!uploadsEnabled}
             onChange={(e) => pickFile(e.target.files?.[0] ?? null)}
           />
           {filePreview && (
@@ -330,7 +406,10 @@ export function PerformanceUploader({
       </div>
 
       <div className="flex justify-end">
-        <Button type="submit" disabled={busy}>
+        <Button
+          type="submit"
+          disabled={busy || (mode === "FILE" && !uploadsEnabled)}
+        >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (

@@ -43,4 +43,20 @@ test.describe("API health", () => {
     });
     expect([401, 403]).toContain(r.status());
   });
+
+  test("/api/upload/capabilities reports the deployment's upload posture", async ({
+    request,
+  }) => {
+    const r = await request.get("/api/upload/capabilities");
+    expect(r.status()).toBe(200);
+    const j = await r.json();
+    expect(typeof j.uploadsEnabled).toBe("boolean");
+    expect(typeof j.storageProvider).toBe("string");
+    // On the live Netlify demo this should be FALSE with a non-empty reason.
+    if (process.env.BASE_URL?.includes("netlify.app") || !process.env.BASE_URL) {
+      expect(j.uploadsEnabled).toBe(false);
+      expect(j.reason, "live demo must explain why uploads are off")
+        .toBeTruthy();
+    }
+  });
 });

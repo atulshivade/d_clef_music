@@ -93,15 +93,43 @@ class EphemeralFsGuardProvider implements IStorageProvider {
 
 let _provider: IStorageProvider | null = null;
 
+/**
+ * Reports whether direct file uploads are usable in the current runtime.
+ *
+ * The UI uses this to gate its FILE tab and steer students toward the
+ * URL/embed flow on hosts where the local filesystem is ephemeral
+ * (Netlify Lambda, etc.). The API route uses it to short-circuit with a
+ * clean 503 instead of letting the upstream Lambda reject the body with
+ * an opaque "Internal Error".
+ */
+export function getUploadCapabilities(): {
+  uploadsEnabled: boolean;
+  reason: string | null;
+  storageProvider: string;
+} {
+  const kind = (process.env.STORAGE_PROVIDER ?? "local").toLowerCase();
+  const isEphemeralRuntime =
+    process.env.IS_NETLIFY === "true" || process.env.NETLIFY === "true";
+
+  if (kind === "local" && isEphemeralRuntime) {
+    return {
+      uploadsEnabled: false,
+      storageProvider: kind,
+      reason:
+        "Direct video uploads are disabled on this deployment because the runtime filesystem is ephemeral. Paste a YouTube or Vimeo link instead, or ask the team to configure durable storage (S3) and re-deploy.",
+    };
+  }
+  return { uploadsEnabled: true, reason: null, storageProvider: kind };
+}
+
 export function getStorage(): IStorageProvider {
   if (_provider) return _provider;
   const kind = process.env.STORAGE_PROVIDER ?? "local";
   // On Netlify (or any serverless host that sets IS_NETLIFY/NETLIFY) the
   // local filesystem is ephemeral — uploads would silently disappear on the
   // next cold start. Refuse loudly unless an explicit durable provider is set.
-  const isEphemeralRuntime =
-    process.env.IS_NETLIFY === "true" || process.env.NETLIFY === "true";
-  if (kind === "local" && isEphemeralRuntime) {
+  const caps = getUploadCapabilities();
+  if (!caps.uploadsEnabled) {
     _provider = new EphemeralFsGuardProvider();
     return _provider;
   }

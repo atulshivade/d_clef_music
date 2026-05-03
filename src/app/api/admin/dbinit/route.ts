@@ -376,7 +376,7 @@ export async function GET(req: Request) {
   const startedAt = Date.now();
   try {
     const dbUrl =
-      process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL ?? "";
+      process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL ?? process.env.NETLIFY_DB_URL ?? "";
     const dbHost = (() => {
       try {
         return new URL(dbUrl).host;

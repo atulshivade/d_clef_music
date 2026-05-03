@@ -41,7 +41,7 @@ function buildPgliteSync():
     const { PGlite } =
       require("@electric-sql/pglite") as typeof import("@electric-sql/pglite");
 
-    const url = process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL;
+    const url = process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL ?? process.env.NETLIFY_DB_URL;
     if (url === "memory:") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return drizzlePglite(new PGlite() as any, { schema }) as unknown as ReturnType<typeof drizzlePostgres>;
@@ -58,7 +58,7 @@ function buildPgliteSync():
 }
 
 function buildDb(): ReturnType<typeof drizzlePostgres> {
-  const url = process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL;
+  const url = process.env.DATABASE_URL ?? process.env.NETLIFY_DATABASE_URL ?? process.env.NETLIFY_DB_URL;
   const isBuildPhase = process.env.NEXT_PHASE === "phase-production-build";
 
   // Real Postgres path — preferred whenever a URL is set.

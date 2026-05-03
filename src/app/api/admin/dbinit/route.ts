@@ -17,7 +17,7 @@
  * uses CREATE IF NOT EXISTS for DDL).
  *
  * Usage:
- *   GET https://djmusic-challenge.netlify.app/api/admin/dbinit?secret=...
+ *   GET https://d-clef-music.netlify.app/api/admin/dbinit?secret=...
  */
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";

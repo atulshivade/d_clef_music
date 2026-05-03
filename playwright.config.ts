@@ -9,7 +9,7 @@ import { defineConfig, devices } from "@playwright/test";
  *   demo DB (Netlify free tier).
  * - `ignoreHTTPSErrors` for the corp-proxy environment that intercepts TLS.
  */
-const BASE_URL = process.env.BASE_URL ?? "https://djmusic-challenge.netlify.app";
+const BASE_URL = process.env.BASE_URL ?? "https://d-clef-music.netlify.app";
 
 export default defineConfig({
   testDir: "./tests/e2e",

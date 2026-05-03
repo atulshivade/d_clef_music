@@ -10,7 +10,7 @@ community discovers what's next via a feed with a Best Performer spotlight.
 
 ## Live demo
 
-- **URL:** https://djmusic-challenge.netlify.app
+- **URL:** https://d-clef-music.netlify.app
 - **Teacher login:** `admin@portal.dev` / `Password123`
 - **Student logins:** `alex@portal.dev` / `Password123`, `riya@portal.dev` / `Password123`
 

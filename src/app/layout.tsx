@@ -14,21 +14,21 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "D Clef Music — Performance & Challenge Portal",
+  title: "Shred Sound Music — Performance & Challenge Portal",
   description:
-    "Where students post their performances, teachers leave timestamped feedback, and the D Clef Music community discovers what's next.",
+    "Where students post their performances, teachers leave timestamped feedback, and the Shred Sound Music community discovers what's next.",
 };
 
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" suppressHydrationWarning className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-screen antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} min-h-screen bg-background text-foreground antialiased`}
       >
         {children}
-        <Toaster richColors closeButton theme="dark" />
+        <Toaster richColors closeButton theme="light" />
       </body>
     </html>
   );

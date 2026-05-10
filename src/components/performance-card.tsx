@@ -32,7 +32,7 @@ export function PerformanceCard({
   canLike = true,
 }: Props) {
   return (
-    <Card className="group overflow-hidden border-border/60 bg-card/80 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/10">
+    <Card className="group overflow-hidden rounded-2xl border-border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-xl">
       <div className="relative">
         <VideoPlayer
           provider={performance.videoProvider}
@@ -41,19 +41,13 @@ export function PerformanceCard({
         />
         <div className="pointer-events-none absolute left-2 top-2 flex flex-wrap gap-1.5">
           {performance.isBestPerformer && (
-            <Badge
-              variant="warning"
-              className="shadow-md shadow-amber-500/30"
-            >
+            <Badge variant="warning" className="shadow-md shadow-amber-500/30">
               <Crown className="mr-1 h-3 w-3" />
               Best Performer
             </Badge>
           )}
           {performance.isVerified && (
-            <Badge
-              variant="success"
-              className="shadow-md shadow-emerald-500/30"
-            >
+            <Badge variant="success" className="shadow-md shadow-emerald-500/30">
               <BadgeCheck className="mr-1 h-3 w-3" />
               Verified
             </Badge>
@@ -70,7 +64,7 @@ export function PerformanceCard({
         <div className="flex items-center justify-between gap-2">
           <Link
             href={`/challenges/${challenge.id}`}
-            className="truncate text-xs font-medium text-primary hover:underline"
+            className="truncate text-xs font-medium uppercase tracking-wide text-primary hover:underline"
             title={challenge.title}
           >
             {challenge.title}

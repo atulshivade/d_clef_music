@@ -6,8 +6,10 @@ import { Navbar } from "@/components/navbar";
  * Authenticated app shell. Anonymous visitors are bounced to /sign-in;
  * the role check (ADMIN-only routes) lives in `(app)/admin/layout.tsx`.
  *
- * This replaces the previous `proxy.ts` (Edge runtime) middleware so the
- * deploy doesn't need the @netlify/edge-bundler Deno toolchain.
+ * `<main>` is intentionally edge-to-edge: pages render their content
+ * inside `.band` strips so we get the alternating cream / ink / white
+ * layout from the mobile-first reference design. Each band constrains
+ * its inner column with `.band-inner` (or `.band-inner-wide`).
  */
 export default async function AppShellLayout({
   children,
@@ -19,9 +21,9 @@ export default async function AppShellLayout({
     redirect("/sign-in?callbackUrl=/challenges");
   }
   return (
-    <div className="min-h-screen bg-background">
+    <div className="flex min-h-screen flex-col bg-background">
       <Navbar />
-      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+      <main className="flex-1">{children}</main>
     </div>
   );
 }

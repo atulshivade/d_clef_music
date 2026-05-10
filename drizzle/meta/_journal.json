@@ -8,6 +8,13 @@
       "when": 1777738109675,
       "tag": "0000_encore_initial",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1778433757435,
+      "tag": "0001_add_cloudinary_video_provider",
+      "breakpoints": true
     }
   ]
 }

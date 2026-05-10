@@ -1,4 +1,4 @@
-# Netlify configuration for D Clef Music — Performance & Challenge Portal
+# Netlify configuration for Shred Sound Music — Performance & Challenge Portal
 #
 # Per Netlify's current Next.js guidance (2026), the OpenNext adapter is
 # applied automatically — DO NOT pin @netlify/plugin-nextjs in package.json

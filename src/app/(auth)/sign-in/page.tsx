@@ -43,7 +43,7 @@ export default async function SignInPage({
     <Card>
       <CardHeader>
         <CardTitle>Welcome back</CardTitle>
-        <CardDescription>Sign in to your D Clef Music account.</CardDescription>
+        <CardDescription>Sign in to your Shred Sound Music account.</CardDescription>
       </CardHeader>
       <CardContent>
         <form action={action} className="space-y-4">

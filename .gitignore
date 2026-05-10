@@ -58,3 +58,8 @@ next-env.d.ts
 /test-results/
 /blob-report/
 /playwright/.cache/
+
+# Design references (not committed)
+/WhatsApp Video*.mp4
+/WhatsApp Image*.jpg
+/WhatsApp Image*.png

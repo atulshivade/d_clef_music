@@ -8,7 +8,7 @@
  */
 import { chromium } from "@playwright/test";
 
-const BASE = process.env.BASE_URL ?? "https://d-clef-music.netlify.app";
+const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 
 async function main() {
   const browser = await chromium.launch();

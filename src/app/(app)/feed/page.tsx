@@ -10,7 +10,6 @@ import {
 import type { Instrument, SkillLevel } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { PerformanceCard } from "@/components/performance-card";
 import { InstrumentIcon } from "@/components/instrument-icon";
 import {
@@ -97,130 +96,149 @@ export default async function FeedPage({
   };
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-col gap-2">
-        <Badge variant="accent" className="w-fit">
-          <Sparkles className="mr-1 h-3 w-3" /> Live performances
-        </Badge>
-        <h1 className="text-3xl font-bold tracking-tight">Performance feed</h1>
-        <p className="text-muted-foreground">
-          Hear what your peers are playing. Filter by instrument or skill level
-          to find your tribe.
-        </p>
-      </header>
+    <>
+      {/* Band 1 — Hero (cream) */}
+      <section className="band band-cream pb-6">
+        <div className="band-inner text-center">
+          <span className="section-eyebrow">
+            <Sparkles className="h-3 w-3" />
+            Live performances
+          </span>
+          <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-5xl">
+            Performance feed
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground sm:text-base">
+            Hear what your peers are playing. Filter by instrument or skill
+            level to find your tribe.
+          </p>
+        </div>
+      </section>
 
-      {/* Filters */}
-      <section className="space-y-3 rounded-xl border bg-card/60 p-4">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <Filter className="h-4 w-4 text-primary" /> Filter
-        </div>
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Instrument
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            <FilterChip
-              href={filterPath({ instrument: null })}
-              active={!instrumentFilter}
-            >
-              All
-            </FilterChip>
-            {INSTRUMENT_VALUES.map((inst) => (
-              <FilterChip
-                key={inst}
-                href={filterPath({ instrument: inst })}
-                active={instrumentFilter === inst}
-              >
-                <InstrumentIcon
-                  instrument={inst as Instrument}
-                  className="mr-1 h-3 w-3"
-                />
-                {formatInstrument(inst)}
-              </FilterChip>
-            ))}
-          </div>
-        </div>
-        <div className="space-y-2">
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">
-            Skill
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            <FilterChip
-              href={filterPath({ skill: null })}
-              active={!skillFilter}
-            >
-              All
-            </FilterChip>
-            {SKILL_LEVEL_VALUES.map((sk) => (
-              <FilterChip
-                key={sk}
-                href={filterPath({ skill: sk })}
-                active={skillFilter === sk}
-              >
-                {formatSkillLevel(sk)}
-              </FilterChip>
-            ))}
+      {/* Filters strip — still cream, sits between hero and gallery */}
+      <section className="band-cream pb-12">
+        <div className="band-inner-wide px-4 sm:px-6">
+          <div className="rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <div className="flex items-center gap-2 text-sm font-semibold">
+              <Filter className="h-4 w-4 text-primary" /> Filter
+            </div>
+            <div className="mt-4 space-y-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Instrument
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <FilterChip
+                    href={filterPath({ instrument: null })}
+                    active={!instrumentFilter}
+                  >
+                    All
+                  </FilterChip>
+                  {INSTRUMENT_VALUES.map((inst) => (
+                    <FilterChip
+                      key={inst}
+                      href={filterPath({ instrument: inst })}
+                      active={instrumentFilter === inst}
+                    >
+                      <InstrumentIcon
+                        instrument={inst as Instrument}
+                        className="mr-1 h-3 w-3"
+                      />
+                      {formatInstrument(inst)}
+                    </FilterChip>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Skill
+                </p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  <FilterChip
+                    href={filterPath({ skill: null })}
+                    active={!skillFilter}
+                  >
+                    All
+                  </FilterChip>
+                  {SKILL_LEVEL_VALUES.map((sk) => (
+                    <FilterChip
+                      key={sk}
+                      href={filterPath({ skill: sk })}
+                      active={skillFilter === sk}
+                    >
+                      {formatSkillLevel(sk)}
+                    </FilterChip>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* Best Performer spotlight */}
+      {/* Band 2 — Best Performer spotlight (ink) */}
       {bestPerformers.length > 0 && (
-        <section className="space-y-3">
-          <header className="flex items-center gap-2">
-            <Crown className="h-5 w-5 text-amber-500" />
-            <h2 className="text-xl font-semibold">Best Performer spotlight</h2>
-            <Badge variant="warning">{bestPerformers.length}</Badge>
-          </header>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {bestPerformers.slice(0, 6).map((r) => (
-              <PerformanceCard
-                key={r.performance.id}
-                performance={r.performance}
-                student={r.student}
-                challenge={r.challenge}
-                likedByMe={likedSet.has(r.performance.id)}
-                canLike={!!viewerId}
-              />
-            ))}
+        <section className="band band-ink">
+          <div className="band-inner-wide">
+            <div className="text-center">
+              <span className="section-eyebrow">Spotlight</span>
+              <h2 className="mt-4 inline-flex items-center gap-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+                <Crown className="h-6 w-6 text-primary" />
+                Best Performer spotlight
+                <Badge variant="warning">{bestPerformers.length}</Badge>
+              </h2>
+            </div>
+            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {bestPerformers.slice(0, 6).map((r) => (
+                <PerformanceCard
+                  key={r.performance.id}
+                  performance={r.performance}
+                  student={r.student}
+                  challenge={r.challenge}
+                  likedByMe={likedSet.has(r.performance.id)}
+                  canLike={!!viewerId}
+                />
+              ))}
+            </div>
           </div>
         </section>
       )}
 
-      {/* Main feed */}
-      <section className="space-y-3">
-        <header className="flex items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <Music2 className="h-5 w-5 text-primary" />
-            All performances
-            <Badge variant="secondary">{rest.length}</Badge>
-          </h2>
-        </header>
-        <Separator />
-        {all.length === 0 ? (
-          <p className="rounded-xl border border-dashed bg-card/50 px-6 py-10 text-center text-sm text-muted-foreground">
-            No performances yet — pick a challenge and be the first to perform.
-          </p>
-        ) : rest.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            All visible performances are featured above.
-          </p>
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {rest.map((r) => (
-              <PerformanceCard
-                key={r.performance.id}
-                performance={r.performance}
-                student={r.student}
-                challenge={r.challenge}
-                likedByMe={likedSet.has(r.performance.id)}
-                canLike={!!viewerId}
-              />
-            ))}
+      {/* Band 3 — All performances (white) */}
+      <section className="band band-white">
+        <div className="band-inner-wide">
+          <div className="text-center">
+            <span className="section-eyebrow">Latest takes</span>
+            <h2 className="mt-4 inline-flex items-center gap-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <Music2 className="h-6 w-6 text-primary" />
+              All performances
+              <Badge variant="secondary">{rest.length}</Badge>
+            </h2>
           </div>
-        )}
+          {all.length === 0 ? (
+            <p className="mx-auto mt-10 max-w-md rounded-2xl border border-dashed border-border bg-secondary/40 px-6 py-10 text-center text-sm text-muted-foreground">
+              No performances yet — pick a challenge and be the first to perform.
+            </p>
+          ) : rest.length === 0 ? (
+            <p className="mt-8 text-center text-sm text-muted-foreground">
+              All visible performances are featured above.
+            </p>
+          ) : (
+            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {rest.map((r) => (
+                <PerformanceCard
+                  key={r.performance.id}
+                  performance={r.performance}
+                  student={r.student}
+                  challenge={r.challenge}
+                  likedByMe={likedSet.has(r.performance.id)}
+                  canLike={!!viewerId}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </section>
-    </div>
+    </>
   );
 }
 
@@ -239,7 +257,7 @@ function FilterChip({
       className={`inline-flex items-center rounded-full border px-3 py-1 text-xs transition-colors ${
         active
           ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-card hover:bg-accent hover:text-accent-foreground"
+          : "border-border bg-card hover:bg-secondary hover:text-foreground"
       }`}
     >
       {children}

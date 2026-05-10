@@ -52,10 +52,11 @@ export const skillLevelEnum = pgEnum("skill_level", [
 ]);
 
 export const videoProviderEnum = pgEnum("video_provider", [
-  "LOCAL", // file in our own storage (dev)
-  "BUNNY", // Bunny.net Stream
-  "VIMEO", // Vimeo
-  "EMBED", // generic external embed (YouTube, etc.)
+  "LOCAL",      // file in our own storage (dev)
+  "BUNNY",      // Bunny.net Stream
+  "VIMEO",      // Vimeo
+  "CLOUDINARY", // Cloudinary — managed video pipeline w/ adaptive streaming
+  "EMBED",      // generic external embed (YouTube, etc.)
 ]);
 
 export const performanceStatusEnum = pgEnum("performance_status", [

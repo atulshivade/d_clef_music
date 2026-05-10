@@ -1,8 +1,8 @@
 import { test, expect } from "./fixtures";
 
 /**
- * Backend smoke tests — hit the deployed Functions directly to confirm the
- * Lambda is healthy and our auth gating works.
+ * Backend smoke tests — hit the Functions / Next API routes directly to
+ * confirm Auth gating and the capabilities probe behave correctly.
  */
 test.describe("API health", () => {
   test("/api/auth/session returns JSON (200) for an anon visitor", async ({
@@ -44,7 +44,7 @@ test.describe("API health", () => {
     expect([401, 403]).toContain(r.status());
   });
 
-  test("/api/upload/capabilities reports the deployment's upload posture", async ({
+  test("/api/upload/capabilities reports a coherent upload posture", async ({
     request,
   }) => {
     const r = await request.get("/api/upload/capabilities");
@@ -52,11 +52,12 @@ test.describe("API health", () => {
     const j = await r.json();
     expect(typeof j.uploadsEnabled).toBe("boolean");
     expect(typeof j.storageProvider).toBe("string");
-    // On the live Netlify demo this should be FALSE with a non-empty reason.
-    if (process.env.BASE_URL?.includes("netlify.app") || !process.env.BASE_URL) {
-      expect(j.uploadsEnabled).toBe(false);
-      expect(j.reason, "live demo must explain why uploads are off")
-        .toBeTruthy();
+    // If uploads are off, the deployment must explain why.
+    if (j.uploadsEnabled === false) {
+      expect(j.reason, "disabled deployments must explain why").toBeTruthy();
     }
+    // Recognise the providers we ship.
+    expect(["local", "s3", "graceful-disabled", "cloudinary", "bunny", "vimeo"])
+      .toContain(j.storageProvider);
   });
 });

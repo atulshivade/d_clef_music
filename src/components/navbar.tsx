@@ -28,16 +28,25 @@ export async function Navbar() {
   const isAdmin = user?.role === "ADMIN";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/70 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-lg shadow-primary/30">
+    <header className="sticky top-0 z-40 border-b border-border/80 bg-background/85 backdrop-blur">
+      <div className="band-inner-wide flex h-14 items-center gap-2 px-3 sm:gap-3 sm:px-6">
+        <Link
+          href="/"
+          className="flex items-center gap-2 font-semibold tracking-tight"
+          aria-label="Shred Sound Music — home"
+        >
+          <span className="grid h-8 w-8 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm">
             <AudioLines className="h-4 w-4" />
           </span>
-          <span className="hidden whitespace-nowrap sm:inline">D Clef Music</span>
+          <span className="hidden whitespace-nowrap sm:inline">
+            Shred Sound Music
+          </span>
         </Link>
 
-        <nav className="ml-4 flex items-center gap-1">
+        <nav
+          className="ml-1 flex items-center gap-1 sm:ml-4"
+          aria-label="Primary"
+        >
           <NavLink href="/challenges" icon={<ClipboardList className="h-4 w-4" />}>
             Challenges
           </NavLink>
@@ -53,22 +62,28 @@ export async function Navbar() {
 
         <div className="ml-auto flex items-center gap-2">
           <a
-            href="https://www.instagram.com/d_clef_music/"
+            href="https://www.instagram.com/shred_sound_music/"
             target="_blank"
             rel="noopener noreferrer"
-            aria-label="Follow D Clef Music on Instagram"
-            className="hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent/10 hover:text-foreground sm:inline-flex"
+            aria-label="Follow Shred Sound Music on Instagram"
+            className="hidden rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground sm:inline-flex"
           >
             <InstagramGlyph className="h-4 w-4" />
           </a>
           {user ? (
             <>
-              <Badge variant={isAdmin ? "accent" : "secondary"} className="hidden sm:inline-flex">
+              <Badge
+                variant={isAdmin ? "accent" : "secondary"}
+                className="hidden sm:inline-flex"
+              >
                 {isAdmin ? "Teacher" : "Student"}
               </Badge>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <button
+                    className="rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="Account menu"
+                  >
                     <Avatar>
                       {user.image && <AvatarImage src={user.image} alt={user.name ?? ""} />}
                       <AvatarFallback>{getInitials(user.name ?? user.email)}</AvatarFallback>

@@ -17,7 +17,7 @@
  * uses CREATE IF NOT EXISTS for DDL).
  *
  * Usage:
- *   GET https://d-clef-music.netlify.app/api/admin/dbinit?secret=...
+ *   GET https://shred-sound-music.netlify.app/api/admin/dbinit?secret=...
  */
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
@@ -57,8 +57,11 @@ const SCHEMA_STATEMENTS: string[] = [
      CREATE TYPE "public"."user_role" AS ENUM('ADMIN','STUDENT');
    EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
   `DO $$ BEGIN
-     CREATE TYPE "public"."video_provider" AS ENUM('LOCAL','BUNNY','VIMEO','EMBED');
+     CREATE TYPE "public"."video_provider" AS ENUM('LOCAL','BUNNY','VIMEO','CLOUDINARY','EMBED');
    EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+  // For DBs initialised before CLOUDINARY was added, top up the enum.
+  // ADD VALUE IF NOT EXISTS is idempotent (Postgres 12+, PGlite 16).
+  `ALTER TYPE "public"."video_provider" ADD VALUE IF NOT EXISTS 'CLOUDINARY' BEFORE 'EMBED'`,
 
   // Tables
   `CREATE TABLE IF NOT EXISTS "user" (

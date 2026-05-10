@@ -12,16 +12,16 @@ export default async function AuthLayout({
   const session = await auth();
   if (session?.user) redirect("/challenges");
   return (
-    <div className="surface-gradient grid min-h-screen place-items-center px-4 py-10">
+    <div className="grid min-h-screen place-items-center bg-background px-4 py-10">
       <div className="w-full max-w-md">
         <Link
           href="/"
-          className="mb-6 flex items-center justify-center gap-2 font-semibold"
+          className="mb-6 flex items-center justify-center gap-2 font-semibold tracking-tight"
         >
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-lg shadow-primary/30">
+          <span className="grid h-9 w-9 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm">
             <AudioLines className="h-5 w-5" />
           </span>
-          D Clef Music
+          Shred Sound Music
         </Link>
         {children}
       </div>

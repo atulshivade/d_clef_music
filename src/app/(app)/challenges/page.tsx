@@ -4,7 +4,6 @@ import { db } from "@/db";
 import { challenges } from "@/db/schema";
 import { ChallengeCard } from "@/components/challenge-card";
 import { Trophy, Sparkles } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 
 export const dynamic = "force-dynamic";
 
@@ -16,36 +15,47 @@ export default async function ChallengesPage() {
     .orderBy(desc(challenges.createdAt));
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-col gap-2">
-        <Badge variant="accent" className="w-fit">
-          <Sparkles className="mr-1 h-3 w-3" /> Live now
-        </Badge>
-        <h1 className="text-3xl font-bold tracking-tight">Active challenges</h1>
-        <p className="text-muted-foreground">
-          Pick a challenge, build something brilliant, and ship it before the deadline.
-        </p>
-      </header>
-
-      {active.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {active.map((c) => (
-            <Link key={c.id} href={`/challenges/${c.id}`}>
-              <ChallengeCard challenge={c} />
-            </Link>
-          ))}
+    <>
+      {/* Hero band */}
+      <section className="band band-cream">
+        <div className="band-inner text-center">
+          <span className="section-eyebrow">
+            <Sparkles className="h-3 w-3" />
+            Live now
+          </span>
+          <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-5xl">
+            Active challenges
+          </h1>
+          <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground sm:text-base">
+            Pick a challenge, build something brilliant, and ship it before the deadline.
+          </p>
         </div>
-      )}
-    </div>
+      </section>
+
+      {/* Gallery band */}
+      <section className="band band-white pt-6">
+        <div className="band-inner-wide">
+          {active.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {active.map((c) => (
+                <Link key={c.id} href={`/challenges/${c.id}`}>
+                  <ChallengeCard challenge={c} />
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+    </>
   );
 }
 
 function EmptyState() {
   return (
-    <div className="grid place-items-center rounded-xl border border-dashed bg-card/50 px-6 py-16 text-center">
-      <div className="grid h-12 w-12 place-items-center rounded-full bg-primary/10 text-primary">
+    <div className="mx-auto grid max-w-md place-items-center rounded-2xl border border-dashed border-border bg-secondary/40 px-6 py-16 text-center">
+      <div className="grid h-12 w-12 place-items-center rounded-full bg-primary/15 text-primary">
         <Trophy className="h-6 w-6" />
       </div>
       <h3 className="mt-4 text-lg font-semibold">No active challenges yet</h3>

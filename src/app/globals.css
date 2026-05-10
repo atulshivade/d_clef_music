@@ -4,86 +4,95 @@
 @custom-variant dark (&:is(.dark *));
 
 /* ----------------------------------------------------------------
- * D Clef Music — music platform palette
+ * Shred Sound Music — banded responsive palette
  *
- * Default theme is dark (set on <html> in layout.tsx). The light
- * fallback is kept for users with `prefers-color-scheme: light`
- * forcing it via dev tooling, but the brand is dark-first.
+ * Light by default. Cream / white surfaces with one charcoal
+ * "Submit" band, a single warm-gold accent, and rounded white
+ * form cards. Dark variant is kept opt-in via `.dark`.
  * ---------------------------------------------------------------- */
 :root {
-  --radius: 0.75rem;
+  --radius: 0.875rem;
 
-  /* Light fallback — slightly cool, not pure white */
-  --background: oklch(0.99 0.005 280);
-  --foreground: oklch(0.15 0.02 280);
+  /* Surface */
+  --background: oklch(0.98 0.012 85);            /* warm cream */
+  --foreground: oklch(0.18 0.012 280);           /* near-black ink */
 
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.02 280);
+  --card-foreground: oklch(0.18 0.012 280);
 
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.02 280);
+  --popover-foreground: oklch(0.18 0.012 280);
 
-  --primary: oklch(0.55 0.25 290);          /* deep violet */
-  --primary-foreground: oklch(0.99 0 0);
+  --primary: oklch(0.78 0.155 78);               /* warm gold */
+  --primary-foreground: oklch(0.18 0.012 280);   /* dark ink on gold */
 
-  --secondary: oklch(0.96 0.01 280);
-  --secondary-foreground: oklch(0.22 0.02 280);
+  --secondary: oklch(0.95 0.012 85);             /* paler cream */
+  --secondary-foreground: oklch(0.22 0.012 280);
 
-  --muted: oklch(0.96 0.01 280);
-  --muted-foreground: oklch(0.5 0.02 280);
+  --muted: oklch(0.95 0.012 85);
+  --muted-foreground: oklch(0.48 0.012 280);
 
-  --accent: oklch(0.7 0.28 340);             /* electric magenta */
-  --accent-foreground: oklch(0.99 0 0);
+  --accent: oklch(0.72 0.16 65);                 /* deeper amber for hover/active */
+  --accent-foreground: oklch(0.18 0.012 280);
 
   --destructive: oklch(0.6 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
 
-  --border: oklch(0.92 0.005 280);
-  --input: oklch(0.92 0.005 280);
-  --ring: oklch(0.55 0.25 290);
+  --border: oklch(0.9 0.008 85);
+  --input: oklch(0.92 0.008 85);
+  --ring: oklch(0.78 0.155 78);
 
-  --success: oklch(0.7 0.17 160);
+  --success: oklch(0.65 0.16 160);
   --warning: oklch(0.78 0.16 80);
 
-  --chart-1: oklch(0.6 0.25 290);
-  --chart-2: oklch(0.7 0.28 340);
-  --chart-3: oklch(0.7 0.18 200);
-  --chart-4: oklch(0.78 0.16 80);
-  --chart-5: oklch(0.7 0.17 160);
+  /* Charcoal band — used for "Submit Your Video" / "Featured" sections */
+  --ink: oklch(0.17 0.012 280);
+  --ink-foreground: oklch(0.97 0.005 80);
+  --ink-muted: oklch(0.27 0.012 280);
+
+  --chart-1: oklch(0.78 0.155 78);
+  --chart-2: oklch(0.72 0.16 65);
+  --chart-3: oklch(0.65 0.16 160);
+  --chart-4: oklch(0.55 0.18 25);
+  --chart-5: oklch(0.5 0.15 280);
 }
 
 .dark {
-  /* Near-black with a warm indigo undertone — great for video */
-  --background: oklch(0.13 0.02 285);
-  --foreground: oklch(0.96 0.01 280);
+  /* Inverted band palette for users who explicitly opt in. */
+  --background: oklch(0.16 0.012 280);
+  --foreground: oklch(0.96 0.012 80);
 
-  --card: oklch(0.18 0.025 285);
-  --card-foreground: oklch(0.96 0.01 280);
+  --card: oklch(0.21 0.015 280);
+  --card-foreground: oklch(0.96 0.012 80);
 
-  --popover: oklch(0.18 0.025 285);
-  --popover-foreground: oklch(0.96 0.01 280);
+  --popover: oklch(0.21 0.015 280);
+  --popover-foreground: oklch(0.96 0.012 80);
 
-  --primary: oklch(0.72 0.22 290);          /* glowing violet */
-  --primary-foreground: oklch(0.13 0.02 285);
+  --primary: oklch(0.82 0.17 78);
+  --primary-foreground: oklch(0.16 0.012 280);
 
-  --secondary: oklch(0.25 0.03 285);
-  --secondary-foreground: oklch(0.96 0.01 280);
+  --secondary: oklch(0.27 0.018 280);
+  --secondary-foreground: oklch(0.96 0.012 80);
 
-  --muted: oklch(0.23 0.025 285);
-  --muted-foreground: oklch(0.7 0.02 280);
+  --muted: oklch(0.25 0.015 280);
+  --muted-foreground: oklch(0.7 0.012 80);
 
-  --accent: oklch(0.74 0.27 340);            /* hot pink / magenta */
-  --accent-foreground: oklch(0.13 0.02 285);
+  --accent: oklch(0.78 0.18 65);
+  --accent-foreground: oklch(0.16 0.012 280);
 
   --destructive: oklch(0.7 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
 
-  --border: oklch(0.28 0.02 285);
-  --input: oklch(0.28 0.02 285);
-  --ring: oklch(0.72 0.22 290);
+  --border: oklch(0.3 0.015 280);
+  --input: oklch(0.3 0.015 280);
+  --ring: oklch(0.82 0.17 78);
 
   --success: oklch(0.78 0.18 160);
   --warning: oklch(0.84 0.17 80);
+
+  --ink: oklch(0.1 0.01 280);
+  --ink-foreground: oklch(0.97 0.005 80);
+  --ink-muted: oklch(0.22 0.012 280);
 }
 
 @theme inline {
@@ -108,6 +117,9 @@
   --color-ring: var(--ring);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
+  --color-ink-muted: var(--ink-muted);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -128,16 +140,94 @@
   }
 }
 
-/* Stage-light gradient for hero/landing surfaces. */
-.surface-gradient {
-  background:
-    radial-gradient(circle at 15% 0%, color-mix(in oklch, var(--primary) 22%, transparent), transparent 55%),
-    radial-gradient(circle at 85% 100%, color-mix(in oklch, var(--accent) 22%, transparent), transparent 55%),
-    radial-gradient(circle at 50% 50%, color-mix(in oklch, var(--primary) 5%, transparent), transparent 70%),
-    var(--background);
+/* ----------------------------------------------------------------
+ * Banded section helpers — mobile-first vertical-flow layout that
+ * scales cleanly to tablets and laptops.
+ *
+ * Each `.band` is a full-bleed strip. `.band-inner` constrains the
+ * content column to a phone-portrait width on mobile, ~720px on
+ * tablet, and ~880px on laptop so single-column reading stays
+ * comfortable on a 1440px display without floating in a sea of
+ * empty space. `.band-inner-wide` opens up to 1280px for grids.
+ * ---------------------------------------------------------------- */
+.band {
+  width: 100%;
+  padding: 2.5rem 1rem;
+}
+@media (min-width: 640px)  { .band { padding: 4rem 2rem; } }
+@media (min-width: 1024px) { .band { padding: 5rem 3rem; } }
+@media (min-width: 1280px) { .band { padding: 6rem 3rem; } }
+
+.band-inner {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 36rem;
+}
+@media (min-width: 640px)  { .band-inner { max-width: 44rem; } }
+@media (min-width: 1024px) { .band-inner { max-width: 56rem; } }
+
+.band-inner-wide {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 80rem;
 }
 
-/* Subtle marquee / equalizer animation for hero accents (used optionally). */
+/* Two-column split used by hero + submit bands at lg+. Mobile
+ * stacks vertically; lg shows side-by-side with the secondary
+ * column nudged to align with the primary column's baseline. */
+.band-split {
+  display: grid;
+  gap: 2.5rem;
+  align-items: center;
+}
+@media (min-width: 1024px) {
+  .band-split {
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: 4rem;
+  }
+}
+
+.band-cream { background: var(--background); color: var(--foreground); }
+.band-white { background: var(--card); color: var(--card-foreground); }
+.band-ink   { background: var(--ink);  color: var(--ink-foreground); }
+.band-gold  { background: var(--primary); color: var(--primary-foreground); }
+
+/* Section eyebrow: small gold dashes flanking an UPPERCASE label. */
+.section-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  color: var(--primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.section-eyebrow::before,
+.section-eyebrow::after {
+  content: "";
+  width: 1.75rem;
+  height: 2px;
+  background: currentColor;
+  border-radius: 999px;
+  opacity: 0.85;
+}
+.band-ink .section-eyebrow { color: var(--primary); }
+
+/* Form card chrome used inside ink bands (e.g. Submit Your Video). */
+.form-card {
+  background: var(--card);
+  color: var(--card-foreground);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.04),
+    0 24px 48px -24px rgba(0, 0, 0, 0.35);
+  padding: 1.75rem;
+}
+@media (min-width: 640px) { .form-card { padding: 2.25rem; } }
+
+/* Subtle marquee / equalizer animation kept available. */
 @keyframes pulse-glow {
   0%, 100% { opacity: 0.4; transform: scaleY(0.6); }
   50%      { opacity: 1;   transform: scaleY(1); }

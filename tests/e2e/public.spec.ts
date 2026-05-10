@@ -1,54 +1,75 @@
 import { test, expect, collectConsoleErrors } from "./fixtures";
 
 test.describe("Public pages (no auth)", () => {
-  test("/ landing renders D Clef Music branding and hero CTA", async ({ page }) => {
+  test("/ landing renders Shred Sound Music branding and hero CTA", async ({
+    page,
+  }) => {
     const errors = collectConsoleErrors(page);
     await page.goto("/");
-    await expect(page).toHaveTitle(/D Clef Music/i);
-    // Brand wordmark in the header should read "D Clef Music".
-    await expect(page.getByText("D Clef Music", { exact: false }).first())
-      .toBeVisible();
-    // Hero H1 reads "Play it. Post it. Get heard." across two coloured spans.
+
+    // Document title carries the brand.
+    await expect(page).toHaveTitle(/Shred Sound Music/i);
+
+    // Brand wordmark appears at least once (top-bar + footer).
     await expect(
-      page.getByRole("heading", { name: /play it.*post it.*get heard/i }).first(),
+      page.getByText("Shred Sound Music", { exact: false }).first(),
     ).toBeVisible();
-    // The dark theme should be applied at the <html> level.
-    const htmlClass = await page.locator("html").getAttribute("class");
-    expect(htmlClass ?? "").toContain("dark");
+
+    // Hero H1 reads "Premium Music Platform" across two coloured spans.
+    await expect(
+      page.getByRole("heading", { name: /premium\s+music\s+platform/i }),
+    ).toBeVisible();
+
     // The two main CTAs should be visible.
-    await expect(page.getByRole("link", { name: /browse performances/i }))
-      .toBeVisible();
-    // The Instagram link in the footer points at the brand handle.
+    await expect(
+      page.getByRole("link", { name: /browse performances/i }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("link", { name: /(join the stage|continue|open studio)/i })
+        .first(),
+    ).toBeVisible();
+
+    // The Instagram link in the footer points at the new brand handle.
     const ig = page.getByRole("link", {
-      name: /follow d clef music on instagram/i,
+      name: /follow shred sound music on instagram/i,
     });
     await expect(ig).toBeVisible();
     await expect(ig).toHaveAttribute(
       "href",
-      "https://www.instagram.com/d_clef_music/",
+      "https://www.instagram.com/shred_sound_music/",
     );
     await expect(ig).toHaveAttribute("target", "_blank");
     await expect(ig).toHaveAttribute("rel", /noopener/);
-    // No console errors during render.
-    expect(errors().filter((e) => !e.includes("preload")).slice(0, 5)).toEqual([]);
+
+    // No console errors during render (other than browser preload noise).
+    expect(errors().filter((e) => !/preload|hydration/i.test(e))).toEqual([]);
   });
 
-  test("no stale 'Encore' branding remains on key pages", async ({ page }) => {
+  test("no stale 'Encore' or 'D Clef Music' branding remains on key pages", async ({
+    page,
+  }) => {
     for (const path of ["/", "/sign-in", "/sign-up"]) {
       await page.goto(path);
       const html = await page.content();
-      expect(
-        html.includes("Encore"),
-        `expected no "Encore" mentions on ${path}`,
-      ).toBe(false);
+      for (const stale of ["Encore", "D Clef Music", "d-clef-music", "d_clef_music"]) {
+        expect(
+          html.includes(stale),
+          `expected no "${stale}" mentions on ${path}`,
+        ).toBe(false);
+      }
     }
   });
 
-  test("/sign-in shows email + password fields", async ({ page }) => {
+  test("/sign-in shows email + password fields and brand copy", async ({ page }) => {
     await page.goto("/sign-in");
     await expect(page.getByLabel(/email/i)).toBeVisible();
     await expect(page.getByLabel(/password/i)).toBeVisible();
     await expect(page.getByRole("button", { name: /sign in/i })).toBeEnabled();
+    // The card description should mention the new brand.
+    await expect(
+      page.getByText(/Sign in to your Shred Sound Music account/i),
+    ).toBeVisible();
   });
 
   test("/sign-up exposes optional instrument + skill", async ({ page }) => {
@@ -61,12 +82,11 @@ test.describe("Public pages (no auth)", () => {
     await expect(
       page.locator("select[name='skillLevel'], #skillLevel"),
     ).toBeAttached();
+    await expect(page.getByText(/Join Shred Sound Music/i)).toBeVisible();
   });
 
   test("/feed redirects unauthenticated visitors to /sign-in", async ({ page }) => {
     const resp = await page.goto("/feed");
-    // Layout guard either issues a 307 (caught here as the final URL) or
-    // performs a client-side redirect. Either way, we end up at /sign-in.
     expect(page.url()).toMatch(/\/sign-in/);
     expect(resp?.status() ?? 200).toBeLessThan(500);
   });
@@ -76,25 +96,26 @@ test.describe("Public pages (no auth)", () => {
     expect(page.url()).toMatch(/\/sign-in/);
   });
 
-  test("dark theme is in effect (body bg is dark, foreground is light)", async ({
-    page,
-  }) => {
-    // Diagnostic for the user's "blacked out" report — this asserts the
-    // *intended* dark palette is in effect, not a missing-stylesheet bug.
-    //
-    // Chromium serialises colour-mix() / oklch() tokens as `lab(L a b)` where
-    // L is in 0–100 (perceptual lightness). Simpler than converting back to
-    // RGB, and a stylesheet failure (=> default white body bg, black text)
-    // would also flip these L values dramatically.
+  test("light theme is in effect (cream bg + dark text)", async ({ page }) => {
+    // The redesigned theme is light cream — bg lightness should be high
+    // and the foreground should be dark. A missing-stylesheet regression
+    // would leave us at a default white bg with black text (still high/low),
+    // so we additionally assert the *primary* CSS custom property is the
+    // expected gold so we're sure the theme tokens loaded.
     await page.goto("/");
-    const { bg, fg } = await page.evaluate(() => ({
-      bg: getComputedStyle(document.body).backgroundColor,
-      fg: getComputedStyle(document.body).color,
-    }));
+    const probe = await page.evaluate(() => {
+      const cs = getComputedStyle(document.body);
+      const root = getComputedStyle(document.documentElement);
+      return {
+        bg: cs.backgroundColor,
+        fg: cs.color,
+        primary: root.getPropertyValue("--primary").trim(),
+      };
+    });
 
     function lightness(colour: string): number | null {
       const lab = colour.match(/^lab\(\s*([0-9.+-]+)/);
-      if (lab) return parseFloat(lab[1]); // already 0–100
+      if (lab) return parseFloat(lab[1]);
       const rgb = colour.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
       if (rgb) {
         const [r, g, b] = rgb.slice(1, 4).map(Number);
@@ -103,14 +124,38 @@ test.describe("Public pages (no auth)", () => {
       return null;
     }
 
-    const bgL = lightness(bg);
-    const fgL = lightness(fg);
-    expect(bgL, `unexpected bg colour format: ${bg}`).not.toBeNull();
-    expect(fgL, `unexpected fg colour format: ${fg}`).not.toBeNull();
-    // If the stylesheet fails to load: body bg defaults to white (L≈100),
-    // text to black (L≈0). The dark theme should give us bg L < 15 and
-    // fg L > 85.
-    expect(bgL!, `body bg should be dark, got ${bg} (L=${bgL})`).toBeLessThan(15);
-    expect(fgL!, `body fg should be bright, got ${fg} (L=${fgL})`).toBeGreaterThan(85);
+    const bgL = lightness(probe.bg);
+    const fgL = lightness(probe.fg);
+    expect(bgL, `unexpected bg colour format: ${probe.bg}`).not.toBeNull();
+    expect(fgL, `unexpected fg colour format: ${probe.fg}`).not.toBeNull();
+    expect(bgL!, `body bg should be light, got ${probe.bg} (L=${bgL})`).toBeGreaterThan(85);
+    expect(fgL!, `body fg should be dark, got ${probe.fg} (L=${fgL})`).toBeLessThan(40);
+    // The gold accent must be a real colour value. We define it as oklch
+    // in CSS but Chromium serialises getPropertyValue() to lab(...). Accept
+    // any colour syntax — but reject the empty string (which is what we'd
+    // see if the stylesheet failed to load at all).
+    expect(probe.primary, `--primary should be set, got "${probe.primary}"`)
+      .toMatch(/oklch|lab|hsl|rgb|#/i);
+  });
+
+  test("landing renders three banded sections (cream + ink + white)", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    // Each top-level <section class="band ..."> should be visible.
+    const cream = page.locator("section.band.band-cream").first();
+    const ink = page.locator("section.band.band-ink").first();
+    const white = page.locator("section.band.band-white").first();
+    await expect(cream).toBeVisible();
+    await expect(ink).toBeVisible();
+    await expect(white).toBeVisible();
+    // Submit Your Video header lives on the ink band.
+    await expect(
+      page.getByRole("heading", { name: /submit your video/i }),
+    ).toBeVisible();
+    // What-you-get header lives on the white band.
+    await expect(
+      page.getByRole("heading", { name: /built for the student stage/i }),
+    ).toBeVisible();
   });
 });

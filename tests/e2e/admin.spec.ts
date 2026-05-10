@@ -95,7 +95,14 @@ test.describe("Teacher (admin) flows", () => {
       // Points default = 100; leave it.
       await page.getByRole("button", { name: /publish challenge/i }).click();
 
-      await page.waitForURL(/\/admin(?:\b|$)/, { timeout: 30_000 });
+      // Wait for the action's redirect to land on EXACTLY /admin (the URL
+      // before submit was /admin/challenges/new — a regex like /\/admin\b/
+      // would match that too, racing past the redirect and into /challenges
+      // before the insert lands on disk).
+      await page.waitForURL(
+        (url) => new URL(url.toString()).pathname === "/admin",
+        { timeout: 30_000 },
+      );
       // The new challenge should appear on /challenges.
       await page.goto("/challenges");
       await expect(page.getByText(title)).toBeVisible({ timeout: 15_000 });
@@ -107,19 +114,31 @@ test.describe("Teacher (admin) flows", () => {
     }) => {
       await signIn(page, TEACHER);
       await page.goto("/admin/challenges/new");
-      // Bypass the HTML5 minLength so the server-side validator runs.
-      await page.evaluate(() => {
-        const t = document.querySelector(
-          "textarea[name='description']",
-        ) as HTMLTextAreaElement;
-        if (t) t.removeAttribute("minLength");
-        const ti = document.querySelector("input[name='title']") as HTMLInputElement;
-        if (ti) ti.removeAttribute("minLength");
-      });
       await page.getByLabel("Title").fill("ok title here");
       await page.getByLabel(/brief/i).fill("x"); // too short
+
+      // React re-applies minLength on every render, so we have to strip it
+      // immediately before submit AND nofvalidate the form to be sure the
+      // browser hands off to handleSubmit (where the server-side validator
+      // is exercised).
+      await page.evaluate(() => {
+        const form = document.querySelector("form") as HTMLFormElement | null;
+        if (form) form.setAttribute("novalidate", "");
+        const t = document.querySelector(
+          "textarea[name='description']",
+        ) as HTMLTextAreaElement | null;
+        t?.removeAttribute("minLength");
+        t?.removeAttribute("required");
+        const ti = document.querySelector(
+          "input[name='title']",
+        ) as HTMLInputElement | null;
+        ti?.removeAttribute("minLength");
+      });
       await page.getByRole("button", { name: /publish challenge/i }).click();
+
       // Either an inline error banner OR a toast — both are acceptable.
+      // sonner renders the toast inside a region with role="status" / a
+      // visible <li>, and the inline form banner shows the same string.
       await expect(
         page.getByText(/meaningful brief|too short/i).first(),
       ).toBeVisible({ timeout: 8_000 });

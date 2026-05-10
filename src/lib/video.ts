@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { getStorage } from "@/lib/storage";
 import type { VideoProvider } from "@/db/schema";
 
@@ -6,9 +7,10 @@ import type { VideoProvider } from "@/db/schema";
  *
  * Music portal video upload always goes through this interface, so the
  * UI layer never has to care whether the file ends up on disk (dev),
- * Bunny.net Stream (cost-effective HLS for production), or Vimeo (drop-in
- * private hosting). Add a new provider by implementing IVideoProvider
- * and selecting it via the `VIDEO_PROVIDER` env var.
+ * Bunny.net Stream (cost-effective HLS for production), Vimeo (drop-in
+ * private hosting), or Cloudinary (generous free tier + auto adaptive
+ * streaming + thumbnails). Add a new provider by implementing
+ * `IVideoProvider` and selecting it via the `VIDEO_PROVIDER` env var.
  *
  * The default `LocalVideoProvider` delegates to the existing storage
  * provider so dev keeps working without any third-party accounts.
@@ -214,6 +216,102 @@ class VimeoVideoProvider implements IVideoProvider {
 }
 
 /* ------------------------------------------------------------------ */
+/* CloudinaryVideoProvider — uploads to Cloudinary's video pipeline.   */
+/* Generous free tier (25 GB storage + bandwidth/month), automatic     */
+/* adaptive streaming (HLS), thumbnails, transformations. Requires:    */
+/*   CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET. */
+/*                                                                     */
+/* Uses signed server-side upload (no unsigned presets, no client      */
+/* exposure of secrets). The signature covers `timestamp` plus any     */
+/* optional eager-transform params we send.                            */
+/* ------------------------------------------------------------------ */
+
+class CloudinaryVideoProvider implements IVideoProvider {
+  readonly kind = "CLOUDINARY" as const;
+
+  constructor(
+    private readonly cloudName: string,
+    private readonly apiKey: string,
+    private readonly apiSecret: string,
+    private readonly folder: string,
+  ) {}
+
+  async upload({
+    file,
+    filename,
+    contentType,
+    title,
+  }: {
+    file: Blob;
+    filename: string;
+    contentType: string;
+    title?: string;
+  }): Promise<UploadedVideo> {
+    const timestamp = Math.floor(Date.now() / 1000);
+    // Cloudinary signs an alphabetically-sorted, ampersand-joined
+    // string of all signed params with the api_secret appended. Keep
+    // the param set tiny so we never get out of sync with the docs.
+    const params: Record<string, string> = {
+      folder: this.folder,
+      timestamp: String(timestamp),
+    };
+    const signature = sign(params, this.apiSecret);
+
+    const fd = new FormData();
+    fd.append("file", file, filename);
+    fd.append("api_key", this.apiKey);
+    fd.append("timestamp", params.timestamp);
+    fd.append("folder", params.folder);
+    fd.append("signature", signature);
+    if (title) fd.append("context", `caption=${title.replace(/[|=]/g, " ")}`);
+
+    const url = `https://api.cloudinary.com/v1_1/${this.cloudName}/video/upload`;
+    const res = await fetch(url, { method: "POST", body: fd });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(`Cloudinary upload failed (${res.status}): ${txt.slice(0, 200)}`);
+    }
+    const j = (await res.json()) as {
+      public_id: string;
+      secure_url: string;
+      bytes: number;
+      duration?: number;
+      format?: string;
+      resource_type?: string;
+    };
+
+    // Quality-optimized MP4 — `q_auto,f_auto` lets Cloudinary pick the
+    // best codec per request and keeps the URL playable in every
+    // browser via the native <video> tag (the existing VideoPlayer).
+    // To switch to adaptive HLS later, change to `/sp_auto/<id>.m3u8`
+    // and add hls.js client-side.
+    const playbackUrl = `https://res.cloudinary.com/${this.cloudName}/video/upload/q_auto,f_auto/${j.public_id}.mp4`;
+    const thumbnailUrl = `https://res.cloudinary.com/${this.cloudName}/video/upload/so_2,w_960,h_540,c_fill,q_auto,f_jpg/${j.public_id}.jpg`;
+
+    return {
+      provider: "CLOUDINARY",
+      externalId: j.public_id,
+      playbackUrl,
+      thumbnailUrl,
+      durationSeconds:
+        typeof j.duration === "number" ? Math.round(j.duration) : null,
+      contentType,
+      size: j.bytes,
+    };
+  }
+}
+
+/** Cloudinary's documented signature scheme: SHA-1 over sorted
+ *  `key=value&key=value` joined string + api_secret. */
+function sign(params: Record<string, string>, secret: string): string {
+  const sorted = Object.keys(params)
+    .sort()
+    .map((k) => `${k}=${params[k]}`)
+    .join("&");
+  return createHash("sha1").update(sorted + secret).digest("hex");
+}
+
+/* ------------------------------------------------------------------ */
 /* Factory                                                             */
 /* ------------------------------------------------------------------ */
 
@@ -242,6 +340,19 @@ export function getVideoProvider(): IVideoProvider {
         throw new Error("VIDEO_PROVIDER=vimeo but VIMEO_ACCESS_TOKEN is missing");
       }
       _provider = new VimeoVideoProvider(token);
+      return _provider;
+    }
+    case "cloudinary": {
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+      const apiKey = process.env.CLOUDINARY_API_KEY;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET;
+      const folder = process.env.CLOUDINARY_FOLDER ?? "shred-sound-music/performances";
+      if (!cloudName || !apiKey || !apiSecret) {
+        throw new Error(
+          "VIDEO_PROVIDER=cloudinary but CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET are missing",
+        );
+      }
+      _provider = new CloudinaryVideoProvider(cloudName, apiKey, apiSecret, folder);
       return _provider;
     }
     case "local":

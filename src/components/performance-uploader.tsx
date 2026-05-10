@@ -280,14 +280,14 @@ export function PerformanceUploader({
     <form onSubmit={handleSubmit} className="space-y-5">
       {caps && !caps.uploadsEnabled && caps.reason && (
         <div
-          className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200"
+          className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
           role="status"
           data-testid="uploads-disabled-banner"
         >
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <div className="font-medium">Direct file uploads are off on this deployment</div>
-            <p className="mt-0.5 text-amber-200/80">{caps.reason}</p>
+            <p className="mt-0.5 text-amber-900/80">{caps.reason}</p>
           </div>
         </div>
       )}
@@ -305,7 +305,7 @@ export function PerformanceUploader({
           <Label htmlFor="file">
             Performance video (max 200 MB)
             {!uploadsEnabled && (
-              <span className="ml-2 text-xs text-amber-300">
+              <span className="ml-2 text-xs text-amber-700">
                 — disabled on this deployment
               </span>
             )}
@@ -405,19 +405,19 @@ export function PerformanceUploader({
         />
       </div>
 
-      <div className="flex justify-end">
-        <Button
-          type="submit"
-          disabled={busy || (mode === "FILE" && !uploadsEnabled)}
-        >
-          {busy ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Send className="h-4 w-4" />
-          )}
-          {uploading ? "Uploading…" : pending ? "Posting…" : "Post performance"}
-        </Button>
-      </div>
+      <Button
+        type="submit"
+        size="lg"
+        className="w-full rounded-full uppercase tracking-wide"
+        disabled={busy || (mode === "FILE" && !uploadsEnabled)}
+      >
+        {busy ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Send className="h-4 w-4" />
+        )}
+        {uploading ? "Uploading…" : pending ? "Posting…" : "Submit"}
+      </Button>
     </form>
   );
 }

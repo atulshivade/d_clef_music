@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { eq, desc, and, inArray } from "drizzle-orm";
-import { Calendar, Trophy, Sparkles, Music2, Crown } from "lucide-react";
+import { Calendar, Trophy, Music2, Crown, Upload } from "lucide-react";
 import { db } from "@/db";
 import {
   challenges,
@@ -10,15 +10,7 @@ import {
 } from "@/db/schema";
 import type { Instrument } from "@/db/schema";
 import { auth } from "@/lib/auth";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { PerformanceCard } from "@/components/performance-card";
 import { PerformanceUploader } from "@/components/performance-uploader";
 import { InstrumentIcon } from "@/components/instrument-icon";
@@ -93,6 +85,7 @@ export default async function ChallengeDetailPage({
     ? subs.filter((s) => s.performance.studentId === viewerId)
     : [];
   const bestPerformers = subs.filter((s) => s.performance.isBestPerformer);
+  const otherPerformances = subs.filter((s) => !s.performance.isBestPerformer);
 
   // Pre-compute the viewer's likes for the visible cards.
   const visibleIds = subs.map((s) => s.performance.id);
@@ -111,127 +104,114 @@ export default async function ChallengeDetailPage({
   }
 
   return (
-    <div className="space-y-8">
-      {/* Hero */}
-      <Card className="overflow-hidden border-border/60 bg-card/80">
-        {challenge.coverImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={challenge.coverImageUrl}
-            alt=""
-            className="h-48 w-full object-cover"
-          />
-        ) : (
-          <div className="h-48 w-full bg-gradient-to-br from-primary/30 via-accent/20 to-primary/10" />
-        )}
-        <CardHeader>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={closed ? "secondary" : "success"}>{deadlineLabel}</Badge>
-            <Badge variant="outline" className="gap-1">
-              <Trophy className="h-3 w-3 text-amber-500" />
-              {challenge.points} pts
-            </Badge>
-            {challenge.instrumentFocus && (
+    <>
+      {/* Band 1 — Hero (cream). 2-column at lg+. */}
+      <section className="band band-cream">
+        <div className="band-inner-wide band-split">
+          <div className="text-center lg:text-left">
+            <span className="section-eyebrow">{challenge.status.toLowerCase()} challenge</span>
+            <h1 className="mt-5 text-3xl font-semibold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+              {challenge.title}
+            </h1>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2 lg:justify-start">
+              <Badge variant={closed ? "secondary" : "success"}>{deadlineLabel}</Badge>
               <Badge variant="outline" className="gap-1">
-                <InstrumentIcon
-                  instrument={challenge.instrumentFocus}
-                  className="h-3 w-3"
-                />
-                {formatInstrument(challenge.instrumentFocus)}
+                <Trophy className="h-3 w-3 text-primary" />
+                {challenge.points} pts
               </Badge>
-            )}
-            {challenge.skillLevelTarget && (
-              <Badge variant="secondary">
-                {formatSkillLevel(challenge.skillLevelTarget)}
-              </Badge>
-            )}
-            <Badge variant="outline">{challenge.status.toLowerCase()}</Badge>
+              {challenge.instrumentFocus && (
+                <Badge variant="outline" className="gap-1">
+                  <InstrumentIcon
+                    instrument={challenge.instrumentFocus}
+                    className="h-3 w-3"
+                  />
+                  {formatInstrument(challenge.instrumentFocus)}
+                </Badge>
+              )}
+              {challenge.skillLevelTarget && (
+                <Badge variant="secondary">
+                  {formatSkillLevel(challenge.skillLevelTarget)}
+                </Badge>
+              )}
+            </div>
+            <p className="mt-5 flex flex-wrap items-center justify-center gap-1.5 text-xs text-muted-foreground lg:justify-start">
+              <Calendar className="h-3.5 w-3.5" />
+              Due{" "}
+              {new Date(challenge.deadline).toLocaleString("en-US", {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+              <span className="text-muted-foreground/60">·</span>
+              Posted {formatDate(challenge.createdAt)}
+            </p>
+            <div className="mt-5 whitespace-pre-wrap text-left text-sm text-foreground/90 sm:text-base">
+              {challenge.description}
+            </div>
           </div>
-          <CardTitle className="text-3xl">{challenge.title}</CardTitle>
-          <CardDescription className="flex items-center gap-1.5 text-sm">
-            <Calendar className="h-3.5 w-3.5" />
-            Due{" "}
-            {new Date(challenge.deadline).toLocaleString("en-US", {
-              dateStyle: "medium",
-              timeStyle: "short",
-            })}
-            <span className="text-muted-foreground/60">·</span>
-            Posted {formatDate(challenge.createdAt)}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="prose prose-invert prose-sm max-w-none whitespace-pre-wrap text-foreground/90">
-            {challenge.description}
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Best Performer highlight */}
-      {bestPerformers.length > 0 && (
-        <section className="space-y-3">
-          <header className="flex items-center gap-2">
-            <Crown className="h-5 w-5 text-amber-500" />
-            <h2 className="text-xl font-semibold">Best performers</h2>
-            <Badge variant="warning">{bestPerformers.length}</Badge>
-          </header>
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {bestPerformers.map((s) => (
-              <PerformanceCard
-                key={s.performance.id}
-                performance={s.performance}
-                student={s.student}
-                challenge={{ id: challenge.id, title: challenge.title }}
-                likedByMe={likedSet.has(s.performance.id)}
-                canLike={!!viewerId}
+          <div className="grid place-items-center">
+            {challenge.coverImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={challenge.coverImageUrl}
+                alt=""
+                className="aspect-[16/10] w-full max-w-md rounded-2xl object-cover shadow-[0_20px_60px_-30px_rgba(0,0,0,0.4)] lg:max-w-none"
               />
-            ))}
+            ) : (
+              <div className="aspect-[16/10] w-full max-w-md rounded-2xl bg-gradient-to-br from-primary/40 via-primary/15 to-primary/30 shadow-[0_20px_60px_-30px_rgba(0,0,0,0.4)] lg:max-w-none" />
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Band 2 — Submit Your Video (ink). 2-column at lg+. */}
+      {session?.user && !isAdmin && (
+        <section className="band band-ink">
+          <div className="band-inner-wide band-split">
+            <div className="text-center lg:text-left">
+              <span className="section-eyebrow">Open mic</span>
+              <h2 className="mt-5 inline-flex items-center gap-2 text-3xl font-semibold tracking-tight sm:text-4xl lg:text-5xl">
+                <Upload className="h-7 w-7 text-primary" />
+                Submit Your Video
+              </h2>
+              <p className="mx-auto mt-3 max-w-md text-sm text-ink-foreground/70 sm:text-base lg:mx-0">
+                {closed
+                  ? "This challenge has closed. New performances are no longer accepted."
+                  : myOwn.length > 0
+                  ? "You've already posted — feel free to add another take."
+                  : "Upload a video, or paste a YouTube / Vimeo link. Tag your instrument and skill so peers can find you."}
+              </p>
+            </div>
+
+            {!closed && (
+              <div className="form-card mx-auto w-full max-w-xl text-left lg:mx-0">
+                <PerformanceUploader
+                  challengeId={challenge.id}
+                  defaults={{
+                    instrument: challenge.instrumentFocus,
+                    skillLevel: challenge.skillLevelTarget,
+                  }}
+                />
+              </div>
+            )}
           </div>
         </section>
       )}
 
-      {/* Submission form */}
-      {session?.user && !isAdmin && (
-        <Card className="border-primary/20 bg-card/80">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-primary" /> Your performance
-            </CardTitle>
-            <CardDescription>
-              {closed
-                ? "This challenge has closed. New performances are no longer accepted."
-                : myOwn.length > 0
-                ? "You've already posted — feel free to add another take."
-                : "Upload a video, or paste a YouTube / Vimeo link."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {closed ? (
-              <p className="text-sm text-muted-foreground">
-                Browse what your peers played below.
-              </p>
-            ) : (
-              <PerformanceUploader
-                challengeId={challenge.id}
-                defaults={{
-                  instrument: challenge.instrumentFocus,
-                  skillLevel: challenge.skillLevelTarget,
-                }}
-              />
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Band 3 — Previous Submissions (white) */}
+      <section className="band band-white">
+        <div className="band-inner-wide">
+          <div className="text-center">
+            <span className="section-eyebrow">Previous submissions</span>
+            <h2 className="mt-4 inline-flex items-center gap-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+              <Music2 className="h-6 w-6 text-primary" />
+              Performances
+              <Badge variant="secondary">{subs.length}</Badge>
+            </h2>
+          </div>
 
-      {/* Gallery + filters */}
-      <section className="space-y-3">
-        <header className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="flex items-center gap-2 text-xl font-semibold">
-            <Music2 className="h-5 w-5 text-primary" />
-            Performances
-            <Badge variant="secondary">{subs.length}</Badge>
-          </h2>
           {instrumentsPresent.length > 1 && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-1.5">
               <FilterChip href={`/challenges/${id}`} active={!filterInstrument}>
                 All
               </FilterChip>
@@ -247,30 +227,58 @@ export default async function ChallengeDetailPage({
               ))}
             </div>
           )}
-        </header>
-        <Separator />
-        {subs.length === 0 ? (
-          <p className="rounded-xl border border-dashed bg-card/50 px-6 py-10 text-center text-sm text-muted-foreground">
-            {filterInstrument
-              ? `No ${formatInstrument(filterInstrument)} performances yet.`
-              : "Be the first to perform."}
-          </p>
-        ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {subs.map((s) => (
-              <PerformanceCard
-                key={s.performance.id}
-                performance={s.performance}
-                student={s.student}
-                challenge={{ id: challenge.id, title: challenge.title }}
-                likedByMe={likedSet.has(s.performance.id)}
-                canLike={!!viewerId}
-              />
-            ))}
-          </div>
-        )}
+
+          {otherPerformances.length === 0 && bestPerformers.length === 0 ? (
+            <p className="mx-auto mt-10 max-w-md rounded-2xl border border-dashed border-border bg-secondary/40 px-6 py-10 text-center text-sm text-muted-foreground">
+              {filterInstrument
+                ? `No ${formatInstrument(filterInstrument)} performances yet.`
+                : "Be the first to perform."}
+            </p>
+          ) : (
+            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {otherPerformances.map((s) => (
+                <PerformanceCard
+                  key={s.performance.id}
+                  performance={s.performance}
+                  student={s.student}
+                  challenge={{ id: challenge.id, title: challenge.title }}
+                  likedByMe={likedSet.has(s.performance.id)}
+                  canLike={!!viewerId}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </section>
-    </div>
+
+      {/* Band 4 — Featured / Best Performers (ink) */}
+      {bestPerformers.length > 0 && (
+        <section className="band band-ink">
+          <div className="band-inner-wide">
+            <div className="text-center">
+              <span className="section-eyebrow">Spotlight</span>
+              <h2 className="mt-4 inline-flex items-center gap-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+                <Crown className="h-6 w-6 text-primary" />
+                Best performers
+                <Badge variant="warning">{bestPerformers.length}</Badge>
+              </h2>
+            </div>
+            <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {bestPerformers.map((s) => (
+                <PerformanceCard
+                  key={s.performance.id}
+                  performance={s.performance}
+                  student={s.student}
+                  challenge={{ id: challenge.id, title: challenge.title }}
+                  likedByMe={likedSet.has(s.performance.id)}
+                  canLike={!!viewerId}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+    </>
   );
 }
 
@@ -289,7 +297,7 @@ function FilterChip({
       className={`inline-flex items-center rounded-full border px-3 py-1 text-xs transition-colors ${
         active
           ? "border-primary bg-primary text-primary-foreground"
-          : "border-border bg-card hover:bg-accent hover:text-accent-foreground"
+          : "border-border bg-card hover:bg-secondary hover:text-foreground"
       }`}
     >
       {children}

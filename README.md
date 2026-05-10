@@ -1,25 +1,26 @@
-# D Clef Music — Performance & Challenge Portal
+# Shred Sound Music — Performance & Challenge Portal
 
-A dark-themed music platform where **teachers** post challenges, **students**
-upload performance videos tagged by instrument and skill, and the D Clef Music
-community discovers what's next via a feed with a Best Performer spotlight.
+A responsive music platform where **teachers** post challenges, **students**
+upload performance videos tagged by instrument and skill, and the Shred Sound
+Music community discovers what's next via a feed with a Best Performer
+spotlight. Mobile-first banded layout that scales cleanly to laptop and tablet.
 
-> Follow on Instagram: [@d_clef_music](https://www.instagram.com/d_clef_music/)
+> Follow on Instagram: [@shred_sound_music](https://www.instagram.com/shred_sound_music/)
 >
 > Built by **Digital COE Gen AI Team**.
 
 ## Live demo
 
-- **URL:** https://d-clef-music.netlify.app
-- **Source:** https://github.com/atulshivade/d_clef_music
+- **Source:** https://github.com/atulshivade/shred-sound-music
+- **Local URL:** http://localhost:3000 (run `npm run dev`)
 - **Teacher login:** `admin@portal.dev` / `Password123`
 - **Student logins:** `alex@portal.dev` / `Password123`, `riya@portal.dev` / `Password123`
 
-> Hosted on Netlify with managed Netlify DB (Neon Postgres). The seed includes
-> 3 challenges, 2 sample performances and one **Best Performer** (Riya's
-> Chopin take). Note: file uploads are disabled on the live demo because
-> Netlify Functions have an ephemeral filesystem — configure
-> `STORAGE_PROVIDER=s3` to enable durable uploads.
+> The seed includes 3 challenges, 2 sample performances and one **Best
+> Performer** (Riya's Chopin take). When deploying to a serverless host
+> (Netlify Functions, Vercel) configure `STORAGE_PROVIDER=s3`, or set
+> `VIDEO_PROVIDER=cloudinary` plus the four Cloudinary env vars in
+> `.env.example` to enable durable uploads.
 
 ---
 
@@ -42,8 +43,14 @@ community discovers what's next via a feed with a Best Performer spotlight.
 - **Best Performer spotlight** on the feed, plus per-challenge highlight on
   the detail page.
 - **Filterable feed and gallery** by instrument and skill.
-- **Dark, music-platform UI** out of the box. Glowing violet primary,
-  electric magenta accent, near-black surface.
+- **Responsive banded UI** out of the box. Light cream / white / charcoal
+  palette with a warm gold accent. Mobile-first single column at ≤ 768 px,
+  comfortable centred reading column at tablet width, and a 2-column hero
+  + submit split at ≥ 1024 px so laptops don't waste their viewport.
+- **Mobile app, future scope.** The current target is a polished mobile-web
+  experience; a wrapped or React Native client can sit on top of the same
+  Next.js API routes (`/api/upload/video`, `/api/upload/capabilities`,
+  `/api/auth/*`).
 
 ---
 
@@ -271,35 +278,59 @@ powershell -File scripts\sanity-write.ps1
 
 ## End-to-end tests (Playwright)
 
-A full Playwright suite under `tests/e2e/` exercises both the UI and the
-backend on the deployed Netlify site (override with `BASE_URL=...` for local).
+A full Playwright suite under `tests/e2e/` exercises the UI and backend
+across **two projects**: a 1440×900 Desktop Chromium and an iPhone 12
+Mobile Safari run. Default `BASE_URL` is `http://localhost:3000` and
+Playwright will boot `npm run dev` for you (`reuseExistingServer: true`),
+so a fresh clone can run the suite with one command.
 
 ```powershell
-# Run against the live demo (default)
+# Run the full suite (boots the dev server if needed)
 npm test
 
-# Run against `npm run dev` on localhost
-$env:BASE_URL = "http://localhost:3000"
+# Run only the desktop Chromium project
+npx playwright test --project=chromium
+
+# Run only the iPhone 12 mobile-safari project
+npx playwright test --project=mobile-safari
+
+# Point the suite at a different deployment (skips the auto-server)
+$env:BASE_URL = "https://shred-sound-music.example.com"
 npm test
 ```
 
 The suite covers:
 
-- **Public** — landing renders, sign-in / sign-up forms, anon redirects from
-  `/admin` and `/feed` to `/sign-in`, **dark theme is in effect** (body bg
-  lightness < 15, foreground > 85; catches a missing-stylesheet regression).
-- **Auth & feed** — student sign-in lands on `/challenges` with seeded data,
-  feed shows the Best Performer spotlight, **liking a performance increases
-  the like count**.
+- **Branding & theme** — title is `Shred Sound Music — Performance & Challenge
+  Portal`, the new wordmark + Instagram handle (`@shred_sound_music`) appear
+  in nav and footer, and **no stale `D Clef Music` / `d-clef-music` /
+  `d_clef_music` / `Encore` strings remain** on `/`, `/sign-in` or `/sign-up`.
+- **Light theme & banded layout** — body background lightness > 85 and
+  foreground < 40 (catches a missing-stylesheet regression), `--primary`
+  resolves to a real colour token, and the landing page renders three
+  banded sections (cream + ink + white) with the expected headings.
+- **Responsive viewports** — at **mobile** (375×812), **tablet** (768×1024),
+  **laptop** (1280×800) and **desktop** (1440×900) the page stays within
+  its horizontal scrollWidth and the hero CTA is in-bounds; the hero is
+  single-column on mobile and 2-column at ≥ 1024 px.
+- **Public surfaces** — sign-in / sign-up forms, anon redirects from
+  `/admin` and `/feed` to `/sign-in`.
+- **Auth & feed** — student sign-in lands on `/challenges` with seeded
+  data, feed shows the Best Performer spotlight, **liking a performance
+  increases the like count**, and the uploader steers students to the
+  embed flow when the deployment can't accept direct uploads.
+- **Navigation** — clicking a challenge card on `/challenges` lands on the
+  detail page with all four banded sections; navbar wordmark routes back
+  to `/`; teacher navbar exposes the **Studio** link, students do not.
 - **Teacher / admin** — dashboard stats render, `/admin/evaluate` exposes
-  Verify / Crown Best / Add feedback, **the new date-time picker** has a
-  visible trigger (not a hidden icon-only one) and **closes immediately on
-  date selection**, the create-challenge form actually creates a challenge
-  and redirects, and an invalid submission shows an inline error rather than
-  a 500 page.
-- **API health** — `/api/auth/session` returns JSON for anon, `/api/admin/dbinit`
-  refuses requests without a valid secret, `/api/upload/video` refuses
-  anonymous uploads.
+  Verify / Crown Best / Add feedback, the date-time picker has a visible
+  trigger and closes immediately on date selection, the create-challenge
+  form actually creates a challenge and redirects, and an invalid
+  submission shows an inline error rather than a 500 page.
+- **API health** — `/api/auth/session` returns JSON for anon,
+  `/api/admin/dbinit` refuses requests without a valid secret,
+  `/api/upload/video` refuses anonymous uploads, `/api/upload/capabilities`
+  reports a coherent posture (`uploadsEnabled` boolean + storageProvider).
 
 Open the HTML report after a run with `npm run test:report`.
 
@@ -310,7 +341,7 @@ Open the HTML report after a run with `npm run test:report`.
 ### Done
 - Music-first schema (instruments, skill levels, video metadata, multi-axis
   feedback, top_performers audit table)
-- `IVideoProvider` with Local / Bunny.net / Vimeo
+- `IVideoProvider` with Local / Bunny.net / Vimeo / Cloudinary
 - `/api/upload/video` with auth, MIME, and size guards
 - Performance uploader (file or embed) tagging instrument + skill
 - Filterable feed + per-challenge gallery
@@ -318,14 +349,21 @@ Open the HTML report after a run with `npm run test:report`.
 - Teacher evaluation studio with timestamped feedback (captures playhead)
   and 0–10 scoring on rhythm / technique / musicality
 - Verified badge + Best Performer crown with audit trail in `top_performer`
-- Dark music-platform theme (default)
+- **Light banded theme** sized for mobile, tablet and laptop
+- **Cross-viewport Playwright suite** — Desktop Chromium + iPhone 12 Mobile
+  Safari, with brand-cleanup, banded-layout, responsive-viewport,
+  navigation, and capability tests
 
 ### Next
+- **Native mobile app.** The current target is a polished mobile-web
+  experience; a React Native (Expo) or Capacitor wrapper can sit on top of
+  the same Next.js API routes (`/api/upload/video`, `/api/auth/*`,
+  `/api/upload/capabilities`).
 - TikTok-style vertical-scroll feed mode (current is a grid spotlight)
 - Likes endpoint + leaderboard view (table + `points` column already exist)
 - Email + Google OAuth wiring (env vars are already there)
-- Supabase Auth swap (currently Auth.js using Postgres for storage)
-- HLS playback through `hls.js` for non-Safari browsers
+- HLS playback through `hls.js` for non-Safari browsers (Cloudinary already
+  emits `m3u8` URLs as well as MP4 — wiring is one component swap)
 
 ---
 

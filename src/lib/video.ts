@@ -247,66 +247,170 @@ class CloudinaryVideoProvider implements IVideoProvider {
     contentType: string;
     title?: string;
   }): Promise<UploadedVideo> {
-    const timestamp = Math.floor(Date.now() / 1000);
-    // Cloudinary signs an alphabetically-sorted, ampersand-joined
-    // string of *every* signed param (except `file`, `api_key`,
-    // `signature`, `resource_type`) with the api_secret appended.
-    // If we append a form field that isn't in the signature payload,
-    // Cloudinary rejects the upload with 401 Invalid Signature.
-    const params: Record<string, string> = {
+    // Reuse the same signed-params builder the client-direct path uses.
+    // This keeps the signature logic in exactly one place — the only
+    // difference here is that we attach the bytes server-side instead
+    // of streaming them straight from the browser.
+    const signed = buildCloudinarySignedParams({
+      cloudName: this.cloudName,
+      apiKey: this.apiKey,
+      apiSecret: this.apiSecret,
       folder: this.folder,
-      timestamp: String(timestamp),
-    };
-    if (title) {
-      // `context` uses key=value pairs separated by `|` per Cloudinary
-      // docs; strip `|` and `=` from the caption so we never produce
-      // ambiguous input. The full literal must be signed.
-      params.context = `caption=${title.replace(/[|=]/g, " ")}`;
-    }
-    const signature = sign(params, this.apiSecret);
+      title,
+    });
 
     const fd = new FormData();
     fd.append("file", file, filename);
-    fd.append("api_key", this.apiKey);
-    fd.append("timestamp", params.timestamp);
-    fd.append("folder", params.folder);
-    if (params.context) fd.append("context", params.context);
-    fd.append("signature", signature);
+    fd.append("api_key", signed.params.api_key);
+    fd.append("timestamp", signed.params.timestamp);
+    fd.append("folder", signed.params.folder);
+    if (signed.params.context) fd.append("context", signed.params.context);
+    fd.append("signature", signed.params.signature);
 
-    const url = `https://api.cloudinary.com/v1_1/${this.cloudName}/video/upload`;
-    const res = await fetch(url, { method: "POST", body: fd });
+    const res = await fetch(signed.uploadUrl, { method: "POST", body: fd });
     if (!res.ok) {
       const txt = await res.text().catch(() => "");
       throw new Error(`Cloudinary upload failed (${res.status}): ${txt.slice(0, 200)}`);
     }
-    const j = (await res.json()) as {
-      public_id: string;
-      secure_url: string;
-      bytes: number;
-      duration?: number;
-      format?: string;
-      resource_type?: string;
-    };
-
-    // Quality-optimized MP4 — `q_auto,f_auto` lets Cloudinary pick the
-    // best codec per request and keeps the URL playable in every
-    // browser via the native <video> tag (the existing VideoPlayer).
-    // To switch to adaptive HLS later, change to `/sp_auto/<id>.m3u8`
-    // and add hls.js client-side.
-    const playbackUrl = `https://res.cloudinary.com/${this.cloudName}/video/upload/q_auto,f_auto/${j.public_id}.mp4`;
-    const thumbnailUrl = `https://res.cloudinary.com/${this.cloudName}/video/upload/so_2,w_960,h_540,c_fill,q_auto,f_jpg/${j.public_id}.jpg`;
+    const j = (await res.json()) as CloudinaryUploadResponse;
+    const urls = cloudinaryPlaybackUrls(this.cloudName, j.public_id);
 
     return {
       provider: "CLOUDINARY",
       externalId: j.public_id,
-      playbackUrl,
-      thumbnailUrl,
+      playbackUrl: urls.playbackUrl,
+      thumbnailUrl: urls.thumbnailUrl,
       durationSeconds:
         typeof j.duration === "number" ? Math.round(j.duration) : null,
       contentType,
       size: j.bytes,
     };
   }
+}
+
+/**
+ * Shape of the JSON Cloudinary returns from `POST /v1_1/<cloud>/video/upload`.
+ *
+ * Exported so the browser-direct flow in `performance-uploader.tsx` parses it
+ * with the same typings the server does.
+ */
+export type CloudinaryUploadResponse = {
+  public_id: string;
+  secure_url: string;
+  bytes: number;
+  duration?: number;
+  format?: string;
+  resource_type?: string;
+};
+
+/**
+ * Signed Cloudinary upload params for a one-shot client-direct upload.
+ *
+ * The browser POSTs the file to `uploadUrl` with all of `params` as
+ * FormData fields. The bytes never traverse our serverless function, so
+ * Vercel's 4.5 MB request-body cap does not apply.
+ *
+ * Returned `params` are minted server-side using `api_secret` and are
+ * valid for ~1 hour (Cloudinary's default timestamp window). They cover
+ * exactly one upload to the configured folder.
+ */
+export type CloudinarySignedUpload = {
+  uploadUrl: string;
+  cloudName: string;
+  folder: string;
+  params: {
+    api_key: string;
+    timestamp: string;
+    folder: string;
+    context?: string;
+    signature: string;
+  };
+};
+
+/**
+ * Compute Cloudinary playback + thumbnail URLs for a public_id.
+ *
+ * Quality-optimised MP4 — `q_auto,f_auto` lets Cloudinary pick the best
+ * codec per request and keeps the URL playable in every browser via
+ * the native `<video>` tag. To switch to adaptive HLS later, change to
+ * `/sp_auto/<id>.m3u8` and add `hls.js` client-side.
+ */
+export function cloudinaryPlaybackUrls(
+  cloudName: string,
+  publicId: string,
+): { playbackUrl: string; thumbnailUrl: string } {
+  return {
+    playbackUrl: `https://res.cloudinary.com/${cloudName}/video/upload/q_auto,f_auto/${publicId}.mp4`,
+    thumbnailUrl: `https://res.cloudinary.com/${cloudName}/video/upload/so_2,w_960,h_540,c_fill,q_auto,f_jpg/${publicId}.jpg`,
+  };
+}
+
+/**
+ * Build a signed Cloudinary upload payload. Pure function — no I/O.
+ *
+ * Cloudinary signs an alphabetically-sorted, ampersand-joined string of
+ * *every* signed param (except `file`, `api_key`, `signature`,
+ * `resource_type`) with the api_secret appended. Adding a form field
+ * later that isn't in the signature payload makes Cloudinary reject the
+ * upload with `401 Invalid Signature`, so this helper is the single
+ * source of truth for both the server-relay and browser-direct paths.
+ */
+export function buildCloudinarySignedParams(args: {
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
+  folder: string;
+  title?: string;
+}): CloudinarySignedUpload {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signedFields: Record<string, string> = {
+    folder: args.folder,
+    timestamp: String(timestamp),
+  };
+  if (args.title) {
+    // `context` uses key=value pairs separated by `|` per Cloudinary
+    // docs; strip `|` and `=` from the caption so we never produce
+    // ambiguous input. The full literal must be signed.
+    signedFields.context = `caption=${args.title.replace(/[|=]/g, " ")}`;
+  }
+  const signature = sign(signedFields, args.apiSecret);
+  return {
+    uploadUrl: `https://api.cloudinary.com/v1_1/${args.cloudName}/video/upload`,
+    cloudName: args.cloudName,
+    folder: args.folder,
+    params: {
+      api_key: args.apiKey,
+      timestamp: signedFields.timestamp,
+      folder: signedFields.folder,
+      ...(signedFields.context ? { context: signedFields.context } : {}),
+      signature,
+    },
+  };
+}
+
+/**
+ * Resolve the active Cloudinary configuration from env, exactly like the
+ * factory does — exported so the `/api/upload/sign` route can mint
+ * signed params without instantiating the full provider.
+ *
+ * Returns null when Cloudinary isn't configured (e.g. the deploy is on
+ * the local provider). Callers should treat null as "404 — not the
+ * active provider".
+ */
+export function resolveCloudinaryConfig(): {
+  cloudName: string;
+  apiKey: string;
+  apiSecret: string;
+  folder: string;
+} | null {
+  const fromUrl = parseCloudinaryUrl(process.env.CLOUDINARY_URL);
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME ?? fromUrl?.cloudName;
+  const apiKey = process.env.CLOUDINARY_API_KEY ?? fromUrl?.apiKey;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET ?? fromUrl?.apiSecret;
+  const folder =
+    process.env.CLOUDINARY_FOLDER ?? "shred-sound-music/performances";
+  if (!cloudName || !apiKey || !apiSecret) return null;
+  return { cloudName, apiKey, apiSecret, folder };
 }
 
 /** Cloudinary's documented signature scheme: SHA-1 over sorted

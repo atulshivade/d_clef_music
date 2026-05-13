@@ -1,7 +1,12 @@
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { test, expect, signIn, STUDENT_ALEX, TEACHER } from "./fixtures";
-import { parseCloudinaryUrl } from "../../src/lib/video";
+import {
+  parseCloudinaryUrl,
+  buildCloudinarySignedParams,
+  cloudinaryPlaybackUrls,
+} from "../../src/lib/video";
 import { VIDEO_PROVIDER_VALUES } from "../../src/lib/validators";
 import { videoProviderEnum } from "../../src/db/schema";
 import { getUploadCapabilities } from "../../src/lib/storage";
@@ -157,6 +162,165 @@ test.describe("API health", () => {
     expect(j.provider).toBe("CLOUDINARY");
     expect(j.playbackUrl).toMatch(/^https:\/\/res\.cloudinary\.com\//);
     expect(j.thumbnailUrl).toMatch(/\.jpg$/);
+  });
+
+  /**
+   * Direct-upload sign endpoint. The browser hits this to get a signed
+   * Cloudinary payload, then POSTs the file straight to Cloudinary so
+   * the bytes never traverse a Vercel serverless function (which caps
+   * the request body at 4.5 MB).
+   *
+   * Anonymous callers must be rejected — the secret must never leak to
+   * unauthenticated visitors.
+   */
+  test("/api/upload/sign refuses anonymous callers", async ({ request }) => {
+    const r = await request.get("/api/upload/sign");
+    expect([401, 403]).toContain(r.status());
+  });
+
+  /**
+   * When `VIDEO_PROVIDER=cloudinary`, the sign endpoint must return a
+   * payload the browser can POST directly to Cloudinary. We assert the
+   * full contract (uploadUrl, cloudName, folder, params) so a future
+   * refactor that quietly drops a field surfaces as a clear failure
+   * here instead of a confusing 401 from Cloudinary at runtime.
+   *
+   * Skipped on runners that aren't wired to Cloudinary — the route's
+   * happy path requires `CLOUDINARY_URL` / discrete env vars.
+   */
+  test("/api/upload/sign returns a usable signed payload for authed users", async ({
+    page,
+  }) => {
+    test.skip(
+      process.env.VIDEO_PROVIDER !== "cloudinary",
+      "VIDEO_PROVIDER is not cloudinary on this runner",
+    );
+
+    await signIn(page, STUDENT_ALEX);
+
+    const r = await page.request.get(
+      "/api/upload/sign?title=" + encodeURIComponent("regression with =|chars"),
+    );
+    expect(
+      r.status(),
+      `unexpected sign status: ${await r.text().catch(() => "(no body)")}`,
+    ).toBe(200);
+
+    const j = (await r.json()) as {
+      uploadUrl?: string;
+      cloudName?: string;
+      folder?: string;
+      params?: {
+        api_key?: string;
+        timestamp?: string;
+        folder?: string;
+        context?: string;
+        signature?: string;
+      };
+    };
+
+    expect(j.uploadUrl).toMatch(
+      /^https:\/\/api\.cloudinary\.com\/v1_1\/[^/]+\/video\/upload$/,
+    );
+    expect(j.cloudName).toBeTruthy();
+    expect(j.folder).toBeTruthy();
+    expect(j.params?.api_key).toBeTruthy();
+    expect(j.params?.timestamp).toMatch(/^\d+$/);
+    expect(j.params?.folder).toBe(j.folder);
+    // The title `"regression with =|chars"` has a literal space before
+    // `=` and the helper replaces both `=` and `|` with single spaces,
+    // so we end up with three consecutive spaces in the caption.
+    expect(j.params?.context).toBe("caption=regression with   chars");
+    expect(j.params?.signature).toMatch(/^[0-9a-f]{40}$/);
+    // The api_secret must never appear in the response — only the
+    // SHA-1 hex digest.
+    const bodyText = JSON.stringify(j);
+    if (process.env.CLOUDINARY_API_SECRET) {
+      expect(bodyText).not.toContain(process.env.CLOUDINARY_API_SECRET);
+    }
+  });
+});
+
+/**
+ * Pure-function regression tests for the Cloudinary signing helper.
+ *
+ * These don't hit a network — they validate that the signature scheme
+ * matches Cloudinary's documented contract (sorted `key=value` joined
+ * with `&`, SHA-1 with api_secret appended) AND that both the
+ * server-relay path (`/api/upload/video`) and the browser-direct path
+ * (`/api/upload/sign`) consume an identical payload shape. A drift in
+ * either direction caused the original "401 Invalid Signature" defect.
+ */
+test.describe("Cloudinary signature helper", () => {
+  test("signs exactly the documented `folder` + `timestamp` payload", () => {
+    const signed = buildCloudinarySignedParams({
+      cloudName: "shedmusic",
+      apiKey: "144116384766285",
+      apiSecret: "test-secret",
+      folder: "shred-sound-music/performances",
+    });
+
+    expect(signed.uploadUrl).toBe(
+      "https://api.cloudinary.com/v1_1/shedmusic/video/upload",
+    );
+    expect(signed.params.api_key).toBe("144116384766285");
+    expect(signed.params.folder).toBe("shred-sound-music/performances");
+    expect(signed.params.context).toBeUndefined();
+    expect(signed.params.timestamp).toMatch(/^\d+$/);
+
+    // Recompute the signature the same way Cloudinary does on receipt
+    // and verify we agree. If the helper ever drops a signed field, the
+    // recomputation will diverge and this test will catch it before a
+    // user does.
+    const toSign =
+      `folder=${signed.params.folder}&timestamp=${signed.params.timestamp}`;
+    const expected = createHash("sha1")
+      .update(toSign + "test-secret")
+      .digest("hex");
+    expect(signed.params.signature).toBe(expected);
+  });
+
+  test("includes `context` in the signed string when a title is supplied", () => {
+    const signed = buildCloudinarySignedParams({
+      cloudName: "shedmusic",
+      apiKey: "144116384766285",
+      apiSecret: "test-secret",
+      folder: "shred-sound-music/performances",
+      title: "tricky|caption=with chars",
+    });
+
+    // `|` and `=` are stripped to avoid colliding with Cloudinary's
+    // context syntax. The literal that gets signed must match what we
+    // post.
+    expect(signed.params.context).toBe(
+      "caption=tricky caption with chars",
+    );
+
+    const sortedKeys: Array<keyof typeof signed.params> = [
+      "context",
+      "folder",
+      "timestamp",
+    ];
+    const toSign = sortedKeys
+      .map((k) => `${k}=${signed.params[k]}`)
+      .join("&");
+    const expected = createHash("sha1")
+      .update(toSign + "test-secret")
+      .digest("hex");
+    expect(signed.params.signature).toBe(expected);
+  });
+
+  test("playback + thumbnail URLs follow the documented transformation shape", () => {
+    const urls = cloudinaryPlaybackUrls(
+      "shedmusic",
+      "shred-sound-music/performances/abc123",
+    );
+    expect(urls.playbackUrl).toBe(
+      "https://res.cloudinary.com/shedmusic/video/upload/q_auto,f_auto/shred-sound-music/performances/abc123.mp4",
+    );
+    expect(urls.thumbnailUrl).toBe(
+      "https://res.cloudinary.com/shedmusic/video/upload/so_2,w_960,h_540,c_fill,q_auto,f_jpg/shred-sound-music/performances/abc123.jpg",
+    );
   });
 });
 
@@ -504,8 +668,10 @@ test.describe("Student → Cloudinary file upload → Teacher dashboard", () => 
     await studentPage.waitForURL(/\/challenges\/[^/]+/, { timeout: 60_000 });
 
     // Stay on the FILE tab (default when uploads are enabled). Attach the
-    // tiny mp4 fixture so the real /api/upload/video → Cloudinary path
-    // runs, then submit the form so createPerformanceAction is invoked.
+    // tiny mp4 fixture so the browser-direct path
+    //   /api/upload/sign → POST to api.cloudinary.com → createPerformanceAction
+    // runs. This sidesteps Vercel's 4.5 MB function body cap, which used
+    // to 413 every >4.5 MB file before the direct-upload refactor.
     await studentPage
       .getByLabel(/performance video/i)
       .setInputFiles(path.resolve(process.cwd(), "tests/fixtures/probe.mp4"));

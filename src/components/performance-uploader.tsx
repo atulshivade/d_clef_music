@@ -124,6 +124,141 @@ export function PerformanceUploader({
     setFilePreview(f ? URL.createObjectURL(f) : null);
   }
 
+  /** Best-effort duration sniff from the local `<video>` used for preview. */
+  function sniffDuration(serverDuration: number | null): number | null {
+    if (serverDuration != null) return serverDuration;
+    if (videoRef.current && Number.isFinite(videoRef.current.duration)) {
+      return Math.round(videoRef.current.duration);
+    }
+    return null;
+  }
+
+  /**
+   * Cloudinary path — the browser POSTs the file *directly* to
+   * Cloudinary using a signed payload minted by `/api/upload/sign`. The
+   * bytes never traverse a Vercel function, so the 4.5 MB request-body
+   * cap does not apply and we can ship a 200 MB clip.
+   */
+  async function uploadDirectToCloudinary(): Promise<{
+    provider: VideoProvider;
+    videoUrl: string;
+    videoExternalId: string | null;
+    thumbnailUrl: string | null;
+    durationSeconds: number | null;
+  }> {
+    if (!file) throw new Error("No file selected");
+
+    const signRes = await fetch(
+      `/api/upload/sign?title=${encodeURIComponent(title.trim())}`,
+      { cache: "no-store" },
+    );
+    if (!signRes.ok) {
+      const ct = signRes.headers.get("content-type") ?? "";
+      const body = ct.includes("application/json")
+        ? (await signRes.json().catch(() => ({}))).error
+        : (await signRes.text()).slice(0, 200);
+      throw new Error(
+        `Could not get an upload URL from the server (${signRes.status}). ${body ?? ""}`.trim(),
+      );
+    }
+    const signed = (await signRes.json()) as {
+      uploadUrl: string;
+      cloudName: string;
+      folder: string;
+      params: {
+        api_key: string;
+        timestamp: string;
+        folder: string;
+        context?: string;
+        signature: string;
+      };
+    };
+
+    const fd = new FormData();
+    fd.append("file", file, file.name);
+    for (const [k, v] of Object.entries(signed.params)) fd.append(k, v);
+
+    const upRes = await fetch(signed.uploadUrl, {
+      method: "POST",
+      body: fd,
+    });
+    if (!upRes.ok) {
+      const txt = await upRes.text().catch(() => "");
+      throw new Error(
+        `Cloudinary rejected the upload (${upRes.status}). ${txt.slice(0, 200)}`,
+      );
+    }
+    const j = (await upRes.json()) as {
+      public_id: string;
+      secure_url: string;
+      bytes: number;
+      duration?: number;
+    };
+
+    const playbackUrl = `https://res.cloudinary.com/${signed.cloudName}/video/upload/q_auto,f_auto/${j.public_id}.mp4`;
+    const thumbnailUrl = `https://res.cloudinary.com/${signed.cloudName}/video/upload/so_2,w_960,h_540,c_fill,q_auto,f_jpg/${j.public_id}.jpg`;
+
+    return {
+      provider: "CLOUDINARY" as const,
+      videoUrl: playbackUrl,
+      videoExternalId: j.public_id,
+      thumbnailUrl,
+      durationSeconds: sniffDuration(
+        typeof j.duration === "number" ? Math.round(j.duration) : null,
+      ),
+    };
+  }
+
+  /**
+   * Local/dev path — POSTs the multipart body to our own API route,
+   * which writes the file to `public/uploads/videos/` via the local
+   * storage provider. Subject to Vercel's 4.5 MB cap on serverless, but
+   * the only deploys that reach this branch are non-Cloudinary ones.
+   */
+  async function uploadViaServerRelay(): Promise<{
+    provider: VideoProvider;
+    videoUrl: string;
+    videoExternalId: string | null;
+    thumbnailUrl: string | null;
+    durationSeconds: number | null;
+  }> {
+    if (!file) throw new Error("No file selected");
+    const fd = new FormData();
+    fd.append("file", file);
+    if (title.trim()) fd.append("title", title.trim());
+    const res = await fetch("/api/upload/video", {
+      method: "POST",
+      body: fd,
+    });
+    if (!res.ok) {
+      const ct = res.headers.get("content-type") ?? "";
+      if (ct.includes("application/json")) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error ?? `Upload failed (${res.status})`);
+      }
+      const txt = (await res.text()).slice(0, 200);
+      throw new Error(
+        `Upload rejected by the server (${res.status}). The file may be too ` +
+          `large for this deployment's request limit. Try the "Paste link" tab ` +
+          `with a YouTube or Vimeo URL instead. Server said: ${txt}`,
+      );
+    }
+    const j = (await res.json()) as {
+      provider: VideoProvider;
+      externalId: string | null;
+      playbackUrl: string;
+      thumbnailUrl: string | null;
+      durationSeconds: number | null;
+    };
+    return {
+      provider: j.provider,
+      videoUrl: j.playbackUrl,
+      videoExternalId: j.externalId,
+      thumbnailUrl: j.thumbnailUrl,
+      durationSeconds: sniffDuration(j.durationSeconds),
+    };
+  }
+
   async function uploadFile(): Promise<{
     provider: VideoProvider;
     videoUrl: string;
@@ -134,50 +269,13 @@ export function PerformanceUploader({
     if (!file) return null;
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      if (title.trim()) fd.append("title", title.trim());
-      const res = await fetch("/api/upload/video", {
-        method: "POST",
-        body: fd,
-      });
-      if (!res.ok) {
-        // Try to parse a JSON error body (our route always returns one).
-        // If the response is plain text (e.g. an upstream gateway 500 from
-        // exceeding the hosting platform's request body limit), fall back
-        // to a friendly message that points at the embed flow.
-        const ct = res.headers.get("content-type") ?? "";
-        if (ct.includes("application/json")) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.error ?? `Upload failed (${res.status})`);
-        }
-        const txt = (await res.text()).slice(0, 200);
-        throw new Error(
-          `Upload rejected by the server (${res.status}). The file may be too ` +
-            `large for this deployment's request limit. Try the "Paste link" tab ` +
-            `with a YouTube or Vimeo URL instead. Server said: ${txt}`,
-        );
-      }
-      const j = (await res.json()) as {
-        provider: VideoProvider;
-        externalId: string | null;
-        playbackUrl: string;
-        thumbnailUrl: string | null;
-        durationSeconds: number | null;
-      };
-      // Best-effort duration sniff from the local <video> we used to preview.
-      const sniffedDuration =
-        j.durationSeconds ??
-        (videoRef.current && Number.isFinite(videoRef.current.duration)
-          ? Math.round(videoRef.current.duration)
-          : null);
-      return {
-        provider: j.provider,
-        videoUrl: j.playbackUrl,
-        videoExternalId: j.externalId,
-        thumbnailUrl: j.thumbnailUrl,
-        durationSeconds: sniffedDuration,
-      };
+      // Pick the upload path off the capability probe. Cloudinary deploys
+      // sidestep the Vercel function entirely (so files can be 100+ MB);
+      // everything else streams through our own /api/upload/video.
+      const useDirect = (caps?.videoProvider ?? "").toLowerCase() === "cloudinary";
+      return useDirect
+        ? await uploadDirectToCloudinary()
+        : await uploadViaServerRelay();
     } finally {
       setUploading(false);
     }

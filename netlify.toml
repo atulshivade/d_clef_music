@@ -17,7 +17,11 @@
   # Skip Husky / git hooks during CI install
   HUSKY = "0"
   # Marker the app code uses to switch storage to "graceful-disabled" mode
-  # when no S3 provider is configured.
+  # when no remote video provider is configured. Set VIDEO_PROVIDER (and
+  # the matching CLOUDINARY_URL / BUNNY_* / VIMEO_* vars) in Netlify's
+  # site environment settings to re-enable direct file uploads — the
+  # capability gate is video-provider-aware and will lift the block as
+  # soon as a remote provider is wired up.
   IS_NETLIFY = "true"
 
 # Sensible default headers — tighten as needed.

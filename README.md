@@ -18,9 +18,10 @@ spotlight. Mobile-first banded layout that scales cleanly to laptop and tablet.
 
 > The seed includes 3 challenges, 2 sample performances and one **Best
 > Performer** (Riya's Chopin take). When deploying to a serverless host
-> (Netlify Functions, Vercel) configure `STORAGE_PROVIDER=s3`, or set
-> `VIDEO_PROVIDER=cloudinary` plus the four Cloudinary env vars in
-> `.env.example` to enable durable uploads.
+> (Netlify Functions, Vercel) point `VIDEO_PROVIDER` at a remote provider
+> (Cloudinary / Bunny / Vimeo) so the FILE upload tab stays enabled — the
+> [Deploying to Netlify](#deploying-to-netlify-or-any-ephemeral-fs-host)
+> section below walks through the env vars step-by-step.
 
 ---
 
@@ -263,6 +264,62 @@ S3 also moves your dev video uploads to S3.
 
 ---
 
+## Deploying to Netlify (or any ephemeral-FS host)
+
+Netlify Functions run on Lambdas whose filesystem **disappears on every cold
+start** — writing video bytes to `public/uploads/` would silently lose them.
+The app detects this (`IS_NETLIFY=true` is baked into `netlify.toml`) and
+disables the FILE upload tab until a *remote* video provider is configured.
+
+The capability gate is **video-provider-aware**: as soon as you point
+`VIDEO_PROVIDER` at any of `cloudinary`, `bunny` or `vimeo`, the bytes
+stream straight from the Lambda to the provider and the FILE tab comes back
+automatically. Nothing else has to change.
+
+### Quickest path — Cloudinary (free tier covers most pilots)
+
+1. Sign up at [cloudinary.com](https://cloudinary.com/users/register/free)
+   (25 GB combined storage + bandwidth per month, automatic adaptive
+   streaming and thumbnails, signed server-side uploads).
+2. In **Netlify → Site settings → Environment variables**, add:
+
+   | Key | Value |
+   |---|---|
+   | `VIDEO_PROVIDER` | `cloudinary` |
+   | `CLOUDINARY_URL` | `cloudinary://<api_key>:<api_secret>@<cloud_name>` *(copy-paste from the Cloudinary dashboard)* |
+   | `CLOUDINARY_FOLDER` | `shred-sound-music/performances` *(optional)* |
+
+   You can also use the discrete trio `CLOUDINARY_CLOUD_NAME` +
+   `CLOUDINARY_API_KEY` + `CLOUDINARY_API_SECRET` if you prefer.
+3. Trigger a fresh deploy. The next visit to a challenge page will show the
+   FILE tab and uploads will land in your Cloudinary account.
+
+### Alternative — Bunny.net Stream (paid but very cheap, native HLS)
+
+   | Key | Value |
+   |---|---|
+   | `VIDEO_PROVIDER` | `bunny` |
+   | `BUNNY_STREAM_LIBRARY_ID` | from the Stream dashboard |
+   | `BUNNY_STREAM_API_KEY` | from the Stream dashboard |
+   | `BUNNY_STREAM_CDN_HOSTNAME` | e.g. `vz-abcdef-123.b-cdn.net` |
+
+### Alternative — Vimeo (drop-in private/unlisted hosting)
+
+   | Key | Value |
+   |---|---|
+   | `VIDEO_PROVIDER` | `vimeo` |
+   | `VIMEO_ACCESS_TOKEN` | an OAuth token with `upload` scope |
+
+### What NOT to set on Netlify
+
+- ❌ `ALLOW_INSECURE_TLS` — dev-only escape hatch for corporate proxies.
+  The instrumentation hook refuses to apply it when `NODE_ENV=production`,
+  but don't add noise.
+- ❌ Anything that looks like a real secret in `IS_NETLIFY`,
+  `AUTH_TRUST_HOST` — those are already pinned in `netlify.toml`.
+
+---
+
 ## Sanity scripts
 
 Two PowerShell scripts in `scripts/` run end-to-end against the dev server:
@@ -330,7 +387,13 @@ The suite covers:
 - **API health** — `/api/auth/session` returns JSON for anon,
   `/api/admin/dbinit` refuses requests without a valid secret,
   `/api/upload/video` refuses anonymous uploads, `/api/upload/capabilities`
-  reports a coherent posture (`uploadsEnabled` boolean + storageProvider).
+  reports a coherent posture (`uploadsEnabled` boolean + storageProvider
+  + videoProvider).
+- **Capability matrix** — `getUploadCapabilities()` returns
+  `uploadsEnabled=false` only when the runtime is ephemeral (`IS_NETLIFY`
+  or `NETLIFY`) AND the video provider is `local`; any remote video
+  provider (`cloudinary` / `bunny` / `vimeo`) flips the FILE tab back on
+  automatically. Seven dedicated specs cover every cell of that matrix.
 
 Open the HTML report after a run with `npm run test:report`.
 

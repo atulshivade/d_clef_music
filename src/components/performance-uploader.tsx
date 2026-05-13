@@ -49,6 +49,7 @@ type UploadCapabilities = {
   uploadsEnabled: boolean;
   reason: string | null;
   storageProvider: string;
+  videoProvider: string;
 };
 
 export function PerformanceUploader({
@@ -80,7 +81,12 @@ export function PerformanceUploader({
         // If the capability probe fails we assume uploads work — local dev
         // path. The API call itself will surface any real failure.
         if (!cancelled) {
-          setCaps({ uploadsEnabled: true, reason: null, storageProvider: "local" });
+          setCaps({
+            uploadsEnabled: true,
+            reason: null,
+            storageProvider: "local",
+            videoProvider: "local",
+          });
           setMode("FILE");
         }
       });

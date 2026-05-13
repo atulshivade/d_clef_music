@@ -93,6 +93,9 @@ class EphemeralFsGuardProvider implements IStorageProvider {
 
 let _provider: IStorageProvider | null = null;
 
+/** Video providers whose bytes never touch our local filesystem. */
+const REMOTE_VIDEO_PROVIDERS = new Set(["cloudinary", "bunny", "vimeo"]);
+
 /**
  * Reports whether direct file uploads are usable in the current runtime.
  *
@@ -101,25 +104,46 @@ let _provider: IStorageProvider | null = null;
  * (Netlify Lambda, etc.). The API route uses it to short-circuit with a
  * clean 503 instead of letting the upstream Lambda reject the body with
  * an opaque "Internal Error".
+ *
+ * Important: a remote video provider (Cloudinary, Bunny.net, Vimeo)
+ * streams the bytes directly from the Lambda to its own storage — the
+ * ephemeral filesystem is never touched. In that case uploads are safe
+ * even on Netlify, regardless of `STORAGE_PROVIDER`.
  */
 export function getUploadCapabilities(): {
   uploadsEnabled: boolean;
   reason: string | null;
   storageProvider: string;
+  videoProvider: string;
 } {
-  const kind = (process.env.STORAGE_PROVIDER ?? "local").toLowerCase();
+  const storageKind = (process.env.STORAGE_PROVIDER ?? "local").toLowerCase();
+  const videoKind = (process.env.VIDEO_PROVIDER ?? "local").toLowerCase();
   const isEphemeralRuntime =
     process.env.IS_NETLIFY === "true" || process.env.NETLIFY === "true";
 
-  if (kind === "local" && isEphemeralRuntime) {
+  // A remote video provider sidesteps the ephemeral FS entirely. Even if
+  // STORAGE_PROVIDER is the local stub, no file ever lands on disk for
+  // video uploads — Cloudinary/Bunny/Vimeo accept the multipart stream
+  // and we just store the playback URL.
+  const remoteVideo = REMOTE_VIDEO_PROVIDERS.has(videoKind);
+
+  if (!remoteVideo && storageKind === "local" && isEphemeralRuntime) {
     return {
       uploadsEnabled: false,
-      storageProvider: kind,
+      storageProvider: storageKind,
+      videoProvider: videoKind,
       reason:
-        "Direct video uploads are disabled on this deployment because the runtime filesystem is ephemeral. Paste a YouTube or Vimeo link instead, or ask the team to configure durable storage (S3) and re-deploy.",
+        "Direct video uploads are disabled on this deployment because the runtime filesystem is ephemeral. " +
+        "Configure a remote video provider (e.g. VIDEO_PROVIDER=cloudinary plus CLOUDINARY_URL) and re-deploy, " +
+        "or paste a YouTube / Vimeo link instead.",
     };
   }
-  return { uploadsEnabled: true, reason: null, storageProvider: kind };
+  return {
+    uploadsEnabled: true,
+    reason: null,
+    storageProvider: storageKind,
+    videoProvider: videoKind,
+  };
 }
 
 export function getStorage(): IStorageProvider {

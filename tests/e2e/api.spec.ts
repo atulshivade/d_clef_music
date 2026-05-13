@@ -4,6 +4,32 @@ import { test, expect, signIn, STUDENT_ALEX, TEACHER } from "./fixtures";
 import { parseCloudinaryUrl } from "../../src/lib/video";
 import { VIDEO_PROVIDER_VALUES } from "../../src/lib/validators";
 import { videoProviderEnum } from "../../src/db/schema";
+import { getUploadCapabilities } from "../../src/lib/storage";
+
+/**
+ * Tiny harness for the env-driven capability matrix. We need to flip
+ * STORAGE_PROVIDER / VIDEO_PROVIDER / IS_NETLIFY per case and restore
+ * the originals so the rest of the suite is unaffected.
+ */
+function withEnv(
+  overrides: Record<string, string | undefined>,
+  fn: () => void,
+) {
+  const original: Record<string, string | undefined> = {};
+  for (const k of Object.keys(overrides)) original[k] = process.env[k];
+  try {
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    fn();
+  } finally {
+    for (const [k, v] of Object.entries(original)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+}
 
 /**
  * Backend smoke tests — hit the Functions / Next API routes directly to
@@ -57,6 +83,10 @@ test.describe("API health", () => {
     const j = await r.json();
     expect(typeof j.uploadsEnabled).toBe("boolean");
     expect(typeof j.storageProvider).toBe("string");
+    // The route must always describe BOTH the storage and the video
+    // provider — the UI uses videoProvider to decide whether direct
+    // uploads will land in durable cloud storage.
+    expect(typeof j.videoProvider).toBe("string");
     // If uploads are off, the deployment must explain why.
     if (j.uploadsEnabled === false) {
       expect(j.reason, "disabled deployments must explain why").toBeTruthy();
@@ -64,6 +94,9 @@ test.describe("API health", () => {
     // Recognise the providers we ship.
     expect(["local", "s3", "graceful-disabled", "cloudinary", "bunny", "vimeo"])
       .toContain(j.storageProvider);
+    expect(["local", "cloudinary", "bunny", "vimeo", "embed"]).toContain(
+      j.videoProvider,
+    );
   });
 
   /**
@@ -242,6 +275,136 @@ test.describe("Schema / validator alignment", () => {
     const dbValues = [...videoProviderEnum.enumValues].sort();
     const zodValues = [...VIDEO_PROVIDER_VALUES].sort();
     expect(zodValues).toEqual(dbValues);
+  });
+});
+
+/**
+ * Capability matrix — the core gate that decides whether the UI shows
+ * the FILE tab or steers users to YouTube/Vimeo links.
+ *
+ * Real-world bug this protects against: on Netlify the FS is ephemeral
+ * so STORAGE_PROVIDER=local is unsafe — but when VIDEO_PROVIDER points
+ * at Cloudinary/Bunny/Vimeo, the bytes stream straight to the cloud and
+ * never touch our disk. Uploads must therefore stay enabled. We tripped
+ * over this in production when the live site kept showing "Direct file
+ * uploads are off" even after Cloudinary was wired.
+ */
+test.describe("getUploadCapabilities()", () => {
+  test("local storage + local video on a normal host -> uploads enabled", () => {
+    withEnv(
+      {
+        STORAGE_PROVIDER: undefined,
+        VIDEO_PROVIDER: undefined,
+        IS_NETLIFY: undefined,
+        NETLIFY: undefined,
+      },
+      () => {
+        const caps = getUploadCapabilities();
+        expect(caps.uploadsEnabled).toBe(true);
+        expect(caps.storageProvider).toBe("local");
+        expect(caps.videoProvider).toBe("local");
+        expect(caps.reason).toBeNull();
+      },
+    );
+  });
+
+  test("local storage + local video on Netlify -> uploads disabled with a reason", () => {
+    withEnv(
+      {
+        STORAGE_PROVIDER: "local",
+        VIDEO_PROVIDER: "local",
+        IS_NETLIFY: "true",
+        NETLIFY: undefined,
+      },
+      () => {
+        const caps = getUploadCapabilities();
+        expect(caps.uploadsEnabled).toBe(false);
+        expect(caps.reason).toMatch(/ephemeral/i);
+        // The reason must actively guide the operator to the fix —
+        // mentioning the cloud provider, not just "S3".
+        expect(caps.reason).toMatch(/cloudinary/i);
+      },
+    );
+  });
+
+  test("VIDEO_PROVIDER=cloudinary on Netlify -> uploads ENABLED", () => {
+    withEnv(
+      {
+        STORAGE_PROVIDER: "local",
+        VIDEO_PROVIDER: "cloudinary",
+        IS_NETLIFY: "true",
+        NETLIFY: undefined,
+      },
+      () => {
+        const caps = getUploadCapabilities();
+        expect(caps.uploadsEnabled).toBe(true);
+        expect(caps.reason).toBeNull();
+        expect(caps.videoProvider).toBe("cloudinary");
+      },
+    );
+  });
+
+  test("VIDEO_PROVIDER=bunny on Netlify -> uploads ENABLED", () => {
+    withEnv(
+      {
+        STORAGE_PROVIDER: "local",
+        VIDEO_PROVIDER: "bunny",
+        IS_NETLIFY: "true",
+        NETLIFY: undefined,
+      },
+      () => {
+        const caps = getUploadCapabilities();
+        expect(caps.uploadsEnabled).toBe(true);
+        expect(caps.videoProvider).toBe("bunny");
+      },
+    );
+  });
+
+  test("VIDEO_PROVIDER=vimeo on Netlify -> uploads ENABLED", () => {
+    withEnv(
+      {
+        STORAGE_PROVIDER: "local",
+        VIDEO_PROVIDER: "vimeo",
+        IS_NETLIFY: "true",
+        NETLIFY: undefined,
+      },
+      () => {
+        const caps = getUploadCapabilities();
+        expect(caps.uploadsEnabled).toBe(true);
+        expect(caps.videoProvider).toBe("vimeo");
+      },
+    );
+  });
+
+  test("upper-case env values are accepted (Netlify dashboard often shouts)", () => {
+    withEnv(
+      {
+        STORAGE_PROVIDER: "LOCAL",
+        VIDEO_PROVIDER: "CLOUDINARY",
+        IS_NETLIFY: "true",
+        NETLIFY: undefined,
+      },
+      () => {
+        const caps = getUploadCapabilities();
+        expect(caps.uploadsEnabled).toBe(true);
+        expect(caps.videoProvider).toBe("cloudinary");
+      },
+    );
+  });
+
+  test("NETLIFY=true (system var) is recognised the same as IS_NETLIFY", () => {
+    withEnv(
+      {
+        STORAGE_PROVIDER: "local",
+        VIDEO_PROVIDER: "local",
+        IS_NETLIFY: undefined,
+        NETLIFY: "true",
+      },
+      () => {
+        const caps = getUploadCapabilities();
+        expect(caps.uploadsEnabled).toBe(false);
+      },
+    );
   });
 });
 

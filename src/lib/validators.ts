@@ -24,10 +24,21 @@ export const SKILL_LEVEL_VALUES = [
   "PRO",
 ] as const;
 
+/**
+ * IMPORTANT: must include EVERY value present in the `video_provider` pgEnum
+ * in `src/db/schema.ts`. Forgetting a value here makes the server action
+ * silently reject otherwise-valid submissions with a Zod error — the DB
+ * column accepts it but the validator doesn't.
+ *
+ * Kept as a plain readonly tuple (instead of `videoProviderEnum.enumValues`
+ * via a direct import) because validators run on the client too, and the
+ * Drizzle schema module pulls in Node-only dependencies.
+ */
 export const VIDEO_PROVIDER_VALUES = [
   "LOCAL",
   "BUNNY",
   "VIMEO",
+  "CLOUDINARY",
   "EMBED",
 ] as const;
 

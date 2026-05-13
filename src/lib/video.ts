@@ -249,12 +249,20 @@ class CloudinaryVideoProvider implements IVideoProvider {
   }): Promise<UploadedVideo> {
     const timestamp = Math.floor(Date.now() / 1000);
     // Cloudinary signs an alphabetically-sorted, ampersand-joined
-    // string of all signed params with the api_secret appended. Keep
-    // the param set tiny so we never get out of sync with the docs.
+    // string of *every* signed param (except `file`, `api_key`,
+    // `signature`, `resource_type`) with the api_secret appended.
+    // If we append a form field that isn't in the signature payload,
+    // Cloudinary rejects the upload with 401 Invalid Signature.
     const params: Record<string, string> = {
       folder: this.folder,
       timestamp: String(timestamp),
     };
+    if (title) {
+      // `context` uses key=value pairs separated by `|` per Cloudinary
+      // docs; strip `|` and `=` from the caption so we never produce
+      // ambiguous input. The full literal must be signed.
+      params.context = `caption=${title.replace(/[|=]/g, " ")}`;
+    }
     const signature = sign(params, this.apiSecret);
 
     const fd = new FormData();
@@ -262,8 +270,8 @@ class CloudinaryVideoProvider implements IVideoProvider {
     fd.append("api_key", this.apiKey);
     fd.append("timestamp", params.timestamp);
     fd.append("folder", params.folder);
+    if (params.context) fd.append("context", params.context);
     fd.append("signature", signature);
-    if (title) fd.append("context", `caption=${title.replace(/[|=]/g, " ")}`);
 
     const url = `https://api.cloudinary.com/v1_1/${this.cloudName}/video/upload`;
     const res = await fetch(url, { method: "POST", body: fd });
@@ -315,6 +323,42 @@ function sign(params: Record<string, string>, secret: string): string {
 /* Factory                                                             */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Parse Cloudinary's canonical connection URL shape:
+ *   cloudinary://<api_key>:<api_secret>@<cloud_name>
+ * The dashboard prints this exact string on the "API Keys" page, so we
+ * support it as a drop-in alternative to the discrete env-var trio.
+ *
+ * Returns `null` when the input is missing or malformed — the caller
+ * then falls back to the discrete vars (and ultimately raises a clear
+ * error if both paths are empty).
+ *
+ * Exported for unit-style assertions; safe to call with `undefined`.
+ */
+export function parseCloudinaryUrl(
+  raw: string | undefined | null,
+):
+  | { cloudName: string; apiKey: string; apiSecret: string }
+  | null {
+  if (!raw) return null;
+  try {
+    // `URL` happily parses `cloudinary://...` (any scheme is accepted).
+    // The hostname becomes the cloud name, username = api key,
+    // password = api secret. Cloudinary's docs require URL-encoding any
+    // `:` or `@` in the secret; the WHATWG URL parser decodes those for
+    // us via `username`/`password` getters.
+    const u = new URL(raw.trim());
+    if (u.protocol !== "cloudinary:") return null;
+    const cloudName = u.hostname;
+    const apiKey = decodeURIComponent(u.username);
+    const apiSecret = decodeURIComponent(u.password);
+    if (!cloudName || !apiKey || !apiSecret) return null;
+    return { cloudName, apiKey, apiSecret };
+  } catch {
+    return null;
+  }
+}
+
 let _provider: IVideoProvider | null = null;
 
 export function getVideoProvider(): IVideoProvider {
@@ -343,13 +387,22 @@ export function getVideoProvider(): IVideoProvider {
       return _provider;
     }
     case "cloudinary": {
-      const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-      const apiKey = process.env.CLOUDINARY_API_KEY;
-      const apiSecret = process.env.CLOUDINARY_API_SECRET;
-      const folder = process.env.CLOUDINARY_FOLDER ?? "shred-sound-music/performances";
+      // Cloudinary accepts two equivalent configuration formats:
+      //   1) The discrete trio: CLOUDINARY_CLOUD_NAME / _API_KEY / _API_SECRET
+      //   2) A single URL the dashboard hands out:
+      //        CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@<cloud_name>
+      // We support both. Discrete vars override URL pieces so power-users
+      // can mix-and-match (e.g. pin a non-default cloud while keeping the
+      // URL around for the SDK's other consumers).
+      const fromUrl = parseCloudinaryUrl(process.env.CLOUDINARY_URL);
+      const cloudName = process.env.CLOUDINARY_CLOUD_NAME ?? fromUrl?.cloudName;
+      const apiKey = process.env.CLOUDINARY_API_KEY ?? fromUrl?.apiKey;
+      const apiSecret = process.env.CLOUDINARY_API_SECRET ?? fromUrl?.apiSecret;
+      const folder =
+        process.env.CLOUDINARY_FOLDER ?? "shred-sound-music/performances";
       if (!cloudName || !apiKey || !apiSecret) {
         throw new Error(
-          "VIDEO_PROVIDER=cloudinary but CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET are missing",
+          "VIDEO_PROVIDER=cloudinary requires either CLOUDINARY_URL or CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET",
         );
       }
       _provider = new CloudinaryVideoProvider(cloudName, apiKey, apiSecret, folder);

@@ -142,6 +142,10 @@ export async function createPerformanceAction(
 
   revalidatePath(`/challenges/${parsed.data.challengeId}`);
   revalidatePath("/feed");
+  // Teachers expect the dashboard + evaluation studio to update the moment
+  // a student posts a video — without a hard refresh.
+  revalidatePath("/admin");
+  revalidatePath("/admin/evaluate");
   return { ok: true };
 }
 

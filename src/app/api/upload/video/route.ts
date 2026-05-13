@@ -53,9 +53,21 @@ export async function POST(req: Request) {
     return NextResponse.json(uploaded);
   } catch (err) {
     console.error("[upload-video] failed", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Upload failed" },
-      { status: 500 },
-    );
+    const message = err instanceof Error ? err.message : "Upload failed";
+    // Drill into `cause` so opaque "fetch failed" turns into something the
+    // user can act on (cert chain issues, DNS, timeouts, …).
+    const cause =
+      err instanceof Error && err.cause && typeof err.cause === "object"
+        ? (err.cause as { code?: string; message?: string })
+        : null;
+    let detail = message;
+    if (cause?.code === "SELF_SIGNED_CERT_IN_CHAIN") {
+      detail =
+        "Outbound TLS to the video provider was blocked by a self-signed certificate (corporate proxy). " +
+        "Set ALLOW_INSECURE_TLS=true in .env.local and restart `npm run dev` to bypass for local development.";
+    } else if (cause?.code) {
+      detail = `${message} (${cause.code}${cause.message ? `: ${cause.message}` : ""})`;
+    }
+    return NextResponse.json({ error: detail }, { status: 500 });
   }
 }
